@@ -184,113 +184,66 @@
             </div>
 
         </div>
-        <div class="g-bottom bg-light m-0 d-flex justify-content-between align-items-center ">
-            <div class="bottom-left d-flex " style="height:10vh;">
-                <div class="g-detail border border-success mb-2" style="display: none;">
-                    <div class="g-details-heading  d-flex justify-content-between align-items-center border-bottom">
-                        <div class="g-details-heading-detail d-flex align-items-center cursor-pointer">
-                            <span><span class="material-icons">
-                                    error
-                                </span></span><span style="    margin-top: -5px;">Details</span>
-                        </div>
-                        <div class="g-details-heading-attachment  d-flex align-items-center cursor-pointer">
-                            <span><span class="material-icons">
-                                    attachment
-                                </span></span><span style="    margin-top: -5px;">attachment</span>
-                        </div>
-                    </div>
-                    <div class="g-details-heading-show-wrap">
-                        <div class="g-details-heading-show">
-                            <div style="font-weight: 600;color: gray;">Joining Info</div>
-                            <div style="padding: 5px 0" class="meeting_url" data-toggle="tooltip" data-placement="top" title="Tooltip on top"></div>
-                            <div style="cursor: pointer;">
-                                <span class="material-icons" style="font-size: 14px">
-                                    content_copy
-                                </span><span class="copy_info font-weight-bold">Copy Joining Info <span class="font-weight-bold link-conf p-1" style="display: none;background-color: aquamarine;border-radius: 5px;">Link
-                                        copied</span></span>
-                            </div>
-                        </div>
-                        <div class="g-details-heading-show-attachment" style="display: none;position:relative;
-                            font-size: 14px;">
-                            <div class="show-attach-file">
+       //changes here
 
-                            </div>
-                            <div class="upload-attach-file">
-                                {{!-- <form action="" method="POST" enctype="multipart/form-data" ref='uploadForm'
-                                    id='uploadForm' class="display-center" style="justify-content: space-between;">
-                                    <div class="custom-file " style="flex-basis:79%;">
-                                        <input type="file" class="custom-file-input" id="customFile" name="imagefile">
-                                        <label class="custom-file-label" for="customFile">Choose file</label>
+       <!-- Find the bottom control section (around line 200) and replace it with: -->
+<div class="g-bottom bg-light m-0 d-flex justify-content-center align-items-center">
+    <div class="d-flex justify-content-center align-items-center" style="height:10vh;">
+        <!-- Mic Control -->
+        <div class="action-icon-style display-center mx-2 cursor-pointer" id="btnMuteUnmute">
+            <span class="material-icons">
+                mic_off
+            </span>
+        </div>
 
-                                    </div>
-                                    <input type="submit" class="btn btn-primary btn-sm" value="Share"
-                                        style="flex-basis:19%;padding: 6px 0;">
-                                </form> --}}
-                                <form enctype="multipart/form-data" ref='uploadForm' id='uploadForm' class="display-center" style="justify-content: space-between;">
-                                    <div class="custom-file " style="flex-basis:79%;">
-                                        <input type="file" class="custom-file-input" id="customFile" name="imagefile">
-                                        <label class="custom-file-label" for="customFile">Choose file</label>
+        <!-- End Call -->
+        <div class="action-icon-style display-center mx-2 cursor-pointer">
+            <span class="material-icons text-danger">
+                call
+            </span>
+        </div>
 
-                                    </div>
-                                    <div class="share-button-wrap">
-                                        <button class="btn btn-primary btn-sm share-attach" style="flex-basis:19%;padding: 6px 20px;">Share</button>
-                                    </div>
+        <!-- Video Control -->
+        <div class="action-icon-style display-center mx-2 cursor-pointer" id="btnStartStopCam">
+            <span class="material-icons">
+                videocam_off
+            </span>
+        </div>
 
-                                </form>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+        <!-- Recording Controls -->
+        <div class="display-center mx-2">
+            <button class="btn btn-danger btn-sm" id="start-recording">Start Recording</button>
+            <button id="download-video" class="btn btn-success btn-sm ml-1" disabled>Download Video</button>
+        </div>
 
-                <div class=" display-center cursor-pointer meeting-details-button">Meeting Details <span class="material-icons">
-                        keyboard_arrow_down
-                    </span>
-                </div>
-            </div>
+        <!-- Present Now Control -->
+        <div class="display-center mx-2 cursor-pointer" id="btnStartStopScreenshare">
+            <button class="btn btn-primary btn-sm">
+                <span class="material-icons align-middle">
+                    present_to_all
+                </span>
+                <span class="align-middle">Present Now</span>
+            </button>
+        </div>
 
-            <div class="bottom-middle d-flex justify-content-center align-items-center" style="height:10vh;">
-                <div class="mic-toggle-wrap action-icon-style display-center mr-2 cursor-pointer" id="btnMuteUnmute">
-                    <span class="material-icons">
-                        mic_off
-                    </span>
-                </div>
-
-                <div class="end-call-wrap action-icon-style display-center mr-2 cursor-pointer">
-                    <span class="material-icons text-danger">
-                        call
-                    </span>
-                </div>
-
-                <div class="video-toggle-wrap action-icon-style display-center cursor-pointer" id="btnStartStopCam">
-                    <span class="material-icons">
-                        videocam_off
-                    </span>
-                </div>
-
-            </div>
-            <div class="bottom-right d-flex justify-content-center align-items-center mr-3 " style="height:10vh;">
-                <div class="present-now-wrap d-flex justify-content-center flex-column align-items-center  mr-5 cursor-pointer" id="btnStartStopScreenshare" style="height:10vh;">
-                    <div class="present-now-icon">
-                        <span class="material-icons">
-                            present_to_all
-                        </span>
-                    </div>
-                    <div>Present Now</div>
-                </div>
-                <button style="display: none;" id="btnResetMeeting">Reset Meeting</button>
-                <div class="option-wrap cursor-pointer display-center" style="height:10vh;position:relative;">
-                    <div class="recording-wrap cursor-pointer" style="position: absolute;display:none;">
-                        <button class="recording-ation btn btn-danger btn-sm" id="start-recording">Start Recording</button>
-                        <button id="download-video" class="btn btn-success btn-sm" disabled>Download Video</button>
-                    </div>
-                    <div class="option-icon">
-                        <span class="material-icons">
-                            more_vert
-                        </span>
-                    </div>
-                </div>
+        <!-- Options Menu -->
+        <div class="display-center mx-2 cursor-pointer" style="position:relative;">
+            <div class="option-icon">
+                <span class="material-icons">
+                    more_vert
+                </span>
             </div>
         </div>
+    </div>
+</div>
+
+     
+
+
+
+
+                   
+        
         <div class="top-box-show" style="display: none;">
 
         </div>
