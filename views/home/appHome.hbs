@@ -2,7 +2,6 @@
 <html>
 
 <head>
-
     <meta name="viewport" content="width=device-width" />
     <title>TeLis Video Classromm</title>
     <link href="https://unpkg.com/material-components-web@latest/dist/material-components-web.min.css" rel="stylesheet">
@@ -20,18 +19,8 @@
 
     <script>
         $(function() {
-
             const urlParams = new URLSearchParams(window.location.search);
-
             var meeting_id = urlParams.get('meetingID');
-
-            // if (!meeting_id) {
-            //     var murl = window.location.origin + "?meetingID=" + (new Date()).getTime();
-            //     $('#meetingid').attr('href', murl).text(murl);
-            //     $("#meetingContainer").hide();
-            //     $("#meetingbox").show();
-            //     return;
-            // }
 
             var user_id = urlParams.get('uid');
             if (!user_id) {
@@ -39,7 +28,6 @@
             }
 
             if (!user_id || !meeting_id) {
-                //alert('user id or meeting id missing');
                 window.location.href = '/sign';
                 return;
             }
@@ -47,17 +35,11 @@
             $("#meetingbox").hide();
             $(".username_holder").val(user_id);
             MyApp._init(user_id, meeting_id);
-
         });
-
     </script>
 </head>
 
 <body>
-    {{!-- <h1>Hello</h1>
-    {{#each listt}}
-    <h3>{{this.thumbnailFile}}fff</h3>
-    {{/each}} --}}
     <div id="meetingbox" style="display: none;">
         <p>It seems you are not trying to join any meeting!
             You may start a new meeting. Here is generated for you. <a id='meetingid' href="#"></a>
@@ -65,16 +47,11 @@
     </div>
 
     <main class="container-fluid d-flex flex-column home-wrap">
-
         <div class="g-top text-light">
             <div class="top-remote-video-show-wrap d-flex">
-
                 <div id="meetingContainer" style="display: none;flex-basis: 75%;">
                     <h1 id='meetingname'></h1>
                     <div class="call-wrap " style="background-color: black;">
-                        <!-- <div style="width:200px;height:300px;float:left;overflow-y: scroll;display:none" id="messages">
-                            <div><input type="text" id="msgbox" /><button id="btnsend">Send</button></div>
-                        </div> -->
                         <div id='divUsers' class="video-wrap" style="display:none;display: flex;flex-wrap: wrap;">
                             <div id="me" class="userbox div-center-column">
                                 <h2 class="display-center" style="font-size: 14px;"></h2>
@@ -91,7 +68,6 @@
                             </div>
                         </div>
                     </div>
-
                 </div>
                 <div class="g-right-details-wrap bg-light text-secondary h-100" style="flex-basis: 25%;z-index: 1;display: none;">
                     <div class="meeting-heading-wrap d-flex justify-content-between align-items-center pr-3 pl-3" style="height: 10vh;">
@@ -159,10 +135,8 @@
                             </div>
                         </div>
                     </div>
-
                 </div>
             </div>
-
 
             <div class="g-top-left bg-light text-secondary w-25 d-flex align-items-center justify-content-between pl-2 pr-2">
                 <div class="top-left-participant-wrap pt-2 cursor-pointer">
@@ -176,80 +150,87 @@
                         message
                     </span>
                 </div>
-                <div class="top-left-time-wrap">
-
-
-                </div>
+                <div class="top-left-time-wrap"></div>
                 <div class="top-left-you-wrap text-light d-none">You</div>
             </div>
-
-        </div>
-       //changes here
-
-       <!-- Find the bottom control section (around line 200) and replace it with: -->
-<div class="g-bottom bg-light m-0 d-flex justify-content-center align-items-center">
-    <div class="d-flex justify-content-center align-items-center" style="height:10vh;">
-        <!-- Mic Control -->
-        <div class="action-icon-style display-center mx-2 cursor-pointer" id="btnMuteUnmute">
-            <span class="material-icons">
-                mic_off
-            </span>
         </div>
 
-        <!-- End Call -->
-        <div class="action-icon-style display-center mx-2 cursor-pointer">
-            <span class="material-icons text-danger">
-                call
-            </span>
-        </div>
+        <div class="g-bottom bg-light m-0 d-flex justify-content-between align-items-center">
+            <!-- Left Section - Meeting Details -->
+            <div class="bottom-left d-flex align-items-center" style="height:10vh;">
+                <div class="display-center cursor-pointer meeting-details-button">
+                    <span class="material-icons mr-1">info</span>
+                    Meeting Details
+                </div>
+            </div>
 
-        <!-- Video Control -->
-        <div class="action-icon-style display-center mx-2 cursor-pointer" id="btnStartStopCam">
-            <span class="material-icons">
-                videocam_off
-            </span>
-        </div>
+            <!-- Center Section - Main Controls -->
+            <div class="d-flex justify-content-center align-items-center" style="height:10vh;">
+                <!-- Mic Control -->
+                <div class="action-icon-style display-center mx-2 cursor-pointer" id="btnMuteUnmute">
+                    <span class="material-icons">mic_off</span>
+                </div>
 
-        <!-- Recording Controls -->
-        <div class="display-center mx-2">
-            <button class="btn btn-danger btn-sm" id="start-recording">Start Recording</button>
-            <button id="download-video" class="btn btn-success btn-sm ml-1" disabled>Download Video</button>
-        </div>
+                <!-- End Call -->
+                <div class="action-icon-style display-center mx-2 cursor-pointer end-call-wrap">
+                    <span class="material-icons text-danger">call</span>
+                </div>
 
-        <!-- Present Now Control -->
-        <div class="display-center mx-2 cursor-pointer" id="btnStartStopScreenshare">
-            <button class="btn btn-primary btn-sm">
-                <span class="material-icons align-middle">
-                    present_to_all
-                </span>
-                <span class="align-middle">Present Now</span>
-            </button>
-        </div>
+                <!-- Video Control -->
+                <div class="action-icon-style display-center mx-2 cursor-pointer" id="btnStartStopCam">
+                    <span class="material-icons">videocam_off</span>
+                </div>
 
-        <!-- Options Menu -->
-        <div class="display-center mx-2 cursor-pointer" style="position:relative;">
-            <div class="option-icon">
-                <span class="material-icons">
-                    more_vert
-                </span>
+                <!-- Recording Controls -->
+                <div class="display-center mx-2">
+                    <button class="btn btn-danger btn-sm" id="start-recording">Start Recording</button>
+                    <button id="download-video" class="btn btn-success btn-sm ml-1" disabled>Download Video</button>
+                </div>
+
+                <!-- Present Now -->
+                <div class="display-center mx-2 cursor-pointer" id="btnStartStopScreenshare">
+                    <button class="btn btn-primary btn-sm">
+                        <span class="material-icons align-middle">present_to_all</span>
+                        <span class="align-middle">Present Now</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Right Section - Options -->
+            <div class="bottom-right d-flex justify-content-center align-items-center mr-3" style="height:10vh;">
+                <div class="option-wrap cursor-pointer display-center" style="position:relative;">
+                    <div class="option-icon">
+                        <span class="material-icons">more_vert</span>
+                    </div>
+                </div>
             </div>
         </div>
-    </div>
-</div>
 
-     
-
-
-
-
-                   
-        
-        <div class="top-box-show" style="display: none;">
-
+        <!-- Meeting Details Panel -->
+        <div class="g-detail" style="display: none; position: fixed; bottom: 80px; left: 20px; background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.2); z-index: 1000; width: 300px;">
+            <div class="g-details-heading d-flex border-bottom">
+                <div class="g-details-heading-detail cursor-pointer p-2">Details</div>
+                <div class="g-details-heading-attachment cursor-pointer p-2">Attachments</div>
+            </div>
+            <div class="g-details-heading-show p-2">
+                <div class="meeting-info">
+                    <h4>Meeting Information</h4>
+                    <p>Meeting URL: <span class="meeting_url"></span></p>
+                    <button class="copy_info btn btn-sm btn-primary">Copy</button>
+                    <span class="link-conf" style="display:none;">Copied!</span>
+                </div>
+            </div>
+            <div class="g-details-heading-show-attachment p-2" style="display:none;">
+                <h4>Attachments</h4>
+                <div class="attachments-list"></div>
+            </div>
         </div>
-        <input type="hidden" name="" class="username_holder">
 
+        <!-- Leave Meeting Confirmation -->
+        <div class="top-box-show" style="display: none;"></div>
+        <input type="hidden" name="" class="username_holder">
     </main>
+
     <script>
         let mediaRecorder;
         let recordedBlobs;
@@ -263,13 +244,10 @@
             } else {
                 stopRecording();
                 recordButton.textContent = 'Start Recording';
-                //            playButton.disabled = false;
                 downloadButton.disabled = false;
                 alert("stop");
             }
         });
-
-
 
         downloadButton.addEventListener('click', () => {
             const blob = new Blob(recordedBlobs, {
@@ -300,8 +278,6 @@
                 video: true,
                 audio: true
             }).then(stream => {
-
-
                 recordedBlobs = [];
                 let options = {
                     mimeType: 'video/webm;codecs=vp9,opus'
@@ -329,13 +305,11 @@
                     mediaRecorder = new MediaRecorder(stream, options);
                 } catch (e) {
                     console.error('Exception while creating MediaRecorder:', e);
-
                     return;
                 }
 
                 console.log('Created MediaRecorder', mediaRecorder, 'with options', options);
                 recordButton.textContent = 'Stop Recording';
-                //        playButton.disabled = true;
                 downloadButton.disabled = true;
                 mediaRecorder.onstop = (event) => {
                     console.log('Recorder stopped: ', event);
@@ -350,16 +324,15 @@
         function stopRecording() {
             mediaRecorder.stop();
         }
+
         $(function() {
             $(document).on("click", ".option-icon", function() {
                 $(".recording-wrap").slideToggle(200)
             })
+            
             const urlParams = new URLSearchParams(window.location.search);
             var meeting_id = urlParams.get('meetingID');
             var base_url = window.location.origin;
-
-
-
 
             $(document).on("click", ".share-attach", function(e) {
                 e.preventDefault();
@@ -385,16 +358,10 @@
                 })
             })
 
-
-
-
             $(".custom-file-input").on("change", function() {
                 var fileName = $(this).val().split("\\").pop();
                 $(this).siblings(".custom-file-label").addClass("selected").html(fileName);
             });
-
-
-
 
             var time = new Date();
             var timeDiv = document.getElementsByClassName("top-left-time-wrap");
@@ -408,40 +375,43 @@
                 $(".g-right-details-wrap").show(300);
                 $(".in-call-wrap-up").show(300);
                 $(".chat-show-wrap").hide(300);
-
             });
+            
             $(document).on('click', '.top-left-chat-wrap', function() {
                 $(".g-right-details-wrap").show(300);
                 $(".in-call-wrap-up").hide(300);
                 $(".chat-show-wrap").show(300);
-
             });
+            
             $(document).on('click', '.meeting-heading-cross', function() {
                 $(".g-right-details-wrap").hide(300);
-
             });
+            
             $(document).on('click', '.chat-heading', function() {
                 $(".in-call-wrap-up").hide(300);
                 $(".chat-show-wrap").show(300);
             });
+            
             $(document).on('click', '.people-heading', function() {
                 $(".in-call-wrap-up").show(300);
                 $(".chat-show-wrap").hide(300);
             });
 
-
+            // Meeting Details Button
             $(document).on('click', '.meeting-details-button', function() {
-                $(".g-detail").slideToggle(300);
+                $(".g-detail").toggle(300);
             });
+            
             $(document).on("click", ".g-details-heading-detail", function() {
                 $(".g-details-heading-show").show();
                 $(".g-details-heading-show-attachment").hide();
-
             })
+            
             $(document).on("click", ".g-details-heading-attachment", function() {
                 $(".g-details-heading-show").hide();
                 $(".g-details-heading-show-attachment").show();
             })
+            
             $(document).on("click", ".copy_info", function() {
                 var $temp = $("<input>");
                 $("body").append($temp);
@@ -453,9 +423,10 @@
                     $('.link-conf').hide();
                 }, 3000)
             })
-            // $('[data-toggle="tooltip"]').tooltip();
+
             var url = window.location.href;
             $(".meeting_url").text(url)
+            
             setTimeout(function() {
                 var videoWidth = $("video").width();
                 $("video").css({
@@ -463,20 +434,13 @@
                 });
             }, 1000)
 
-            function videoWith() {
-                var videoCounter = $(".userbox").length;
-                var videoContainerWidth = $("#divUsers").width();
-                var videoWidth = (Math.floor(videoContainerWidth / videoCounter)) / 2;
-                $("video").css({
-                    "width": videoWidth + "px"
-                });
-            }
+            // End Call Button
             $(document).on('click', '.end-call-wrap', function() {
                 $('.top-box-show').css({
                     "display": "block"
                 }).html('<div class="top-box align-vertical-middle profile-dialoge-show "> <h1 class="mt-2">Leave Meeting</h1> <hr> <div class="call-leave-cancel-action d-flex justify-content-center align-items-center w-100"> <a href="/sign"><button class="call-leave-action btn btn-danger mr-5">Leave</button></a> <button class="call-cancel-action btn btn-secondary">Cancel</button> </div> </div>');
-
             })
+            
             $(document).mouseup(function(e) {
                 var container = new Array();
                 container.push($('.top-box-show'));
@@ -485,14 +449,12 @@
                         $(value).empty();
                     }
                 })
-
             })
+            
             $(document).on('click', '.call-cancel-action', function() {
                 $('.top-box-show').html('');
             })
         })
-
     </script>
 </body>
-
 </html>
