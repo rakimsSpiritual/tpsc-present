@@ -3,6 +3,6 @@ Step 1: Install Latest Version of Node JS
 Step 2: Install Express And Socket.io
 Step 3: Run Server.js using "node server"
 
-db_passwordOayjjMYbnDWjeoKa
+db_passwordOayjYMzbnDtjeoKanDWjeoKa
 
-db_name=publicservicescollege
+db_name=kahamaCollegeofHealthAndAlliedScience
