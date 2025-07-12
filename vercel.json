@@ -1,0 +1,11 @@
+{
+  "version": 2,
+  "public": "tpsc-present2027",
+  "cleanUrls": true,
+  "routes": [
+    {
+      "src": "/.*",
+      "dest": "/tpsc-present2027/index.html"
+    }
+  ]
+}
