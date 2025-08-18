@@ -1,73 +1,79 @@
-const express = require("express");
-const path = require("path");
-const { engine } = require("express-handlebars");
-const bodyParser = require("body-parser");
-const fileUpload = require("express-fileupload");
-const fs = require("fs");
+const express = require('express');
+const http = require('http');
+const { Server } = require('socket.io');
+const path = require('path');
+
 const app = express();
+const server = http.createServer(app);
+const io = new Server(server);
 
-require("./models/db");
+// Serve static files
+app.use(express.static(path.join(__dirname, 'public')));
 
-app.use(bodyParser.urlencoded({ extended: true }));
-app.use(bodyParser.json());
-app.use(fileUpload());
-
-app.set("views", path.join(__dirname, "/views"));
-app.engine(
-  "hbs",
-  engine({
-    extname: "hbs",
-    defaultLayout: "mainLayout",
-    layoutsDir: path.join(__dirname, "/views/layouts"),
-  })
-);
-app.set("view engine", "hbs");
-app.use(express.static(path.join(__dirname, "public")));
-
-// Controllers
-const homeController = require("./controllers/homeController");
-const loginController = require("./controllers/loginController");
-app.use("/", homeController);
-app.use("/sign", loginController);
-
-const server = app.listen(process.env.PORT || 3000, () => {
-  console.log("Server started on port 3000");
+// Routes
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public/signin.hbs')); // Or use your template engine
 });
 
-// WebRTC Socket.IO signaling
-const io = require("socket.io")(server);
-let users = [];
+// --- WebRTC signaling via Socket.IO ---
+const meetings = {}; // { meetingID: [userIDs] }
 
-io.on("connection", (socket) => {
-  console.log("New connection:", socket.id);
+io.on('connection', socket => {
+    console.log('A user connected:', socket.id);
 
-  socket.on("userconnect", (data) => {
-    const { dsiplayName, meetingid } = data;
-    socket.meetingId = meetingid;
-    socket.userName = dsiplayName;
-    users.push({ connectionId: socket.id, meetingId: meetingid, userName: dsiplayName });
+    // Join meeting
+    socket.on('joinMeeting', ({ meetingID, userID }) => {
+        socket.join(meetingID);
+        socket.userID = userID;
+        socket.meetingID = meetingID;
 
-    const otherUsers = users.filter((u) => u.meetingId === meetingid && u.connectionId !== socket.id);
-    socket.emit("userconnected", otherUsers);
+        if (!meetings[meetingID]) meetings[meetingID] = [];
+        const participants = meetings[meetingID];
 
-    otherUsers.forEach((u) => {
-      io.to(u.connectionId).emit("informAboutNewConnection", { other_user_id: dsiplayName, connId: socket.id });
+        // Send existing participants to new user
+        socket.emit('existingParticipants', participants);
+
+        // Notify others
+        socket.to(meetingID).emit('userJoined', { userID });
+
+        // Add user to meeting list
+        if (!participants.includes(userID)) participants.push(userID);
+
+        console.log(`User ${userID} joined meeting ${meetingID}`);
     });
-  });
 
-  socket.on("exchangeSDP", (data) => {
-    io.to(data.to_connid).emit("exchangeSDP", { from_connid: socket.id, message: data.message });
-  });
+    // Signal data
+    socket.on('signal', ({ to, from, data }) => {
+        // Find socket of the target user in same meeting
+        const room = io.sockets.adapter.rooms.get(socket.meetingID);
+        if (!room) return;
+        room.forEach(sid => {
+            const s = io.sockets.sockets.get(sid);
+            if (s.userID === to) {
+                s.emit('signal', { from, data });
+            }
+        });
+    });
 
-  socket.on("sendMessage", (msg) => {
-    const meetingUsers = users.filter((u) => u.meetingId === socket.meetingId);
-    meetingUsers.forEach((u) => io.to(u.connectionId).emit("showChatMessage", { from: socket.userName, message: msg, time: new Date().toLocaleTimeString() }));
-  });
+    // Chat messages
+    socket.on('sendMessage', ({ meetingID, user, message }) => {
+        io.to(meetingID).emit('newMessage', { user, message });
+    });
 
-  socket.on("disconnect", () => {
-    const meetingId = socket.meetingId;
-    users = users.filter((u) => u.connectionId !== socket.id);
-    const meetingUsers = users.filter((u) => u.meetingId === meetingId);
-    meetingUsers.forEach((u) => io.to(u.connectionId).emit("userDisconnected", { connId: socket.id }));
-  });
+    // Disconnect
+    socket.on('disconnect', () => {
+        const { meetingID, userID } = socket;
+        if (meetingID && userID && meetings[meetingID]) {
+            meetings[meetingID] = meetings[meetingID].filter(u => u !== userID);
+            // Notify others
+            socket.to(meetingID).emit('userLeft', { userID });
+        }
+        console.log('A user disconnected:', socket.id);
+    });
+});
+
+// Start server
+const PORT = process.env.PORT || 3000;
+server.listen(PORT, () => {
+    console.log(`Server running on http://localhost:${PORT}`);
 });
