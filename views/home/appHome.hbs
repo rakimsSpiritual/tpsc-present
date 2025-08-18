@@ -4,34 +4,31 @@
     <meta charset="UTF-8">
     <title>TeLis Video Classroom</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-    <!-- CSS -->
+    <!-- CSS Libraries -->
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
     <link rel="stylesheet" href="/bootstrap.min.css">
     <link rel="stylesheet" href="/style.css">
-
-    <!-- JS Libraries -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
     <script src="/socket.io/socket.io.js"></script>
 </head>
 <body>
-<main class="container-fluid">
+<main class="container-fluid d-flex flex-column home-wrap">
     <h1>TeLis Video Classroom</h1>
 
     <div class="row">
         <!-- Video Section -->
-        <div class="col-md-9" id="meetingContainer">
+        <div class="col-md-9" id="meetingContainer" style="display:none;">
             <div id="divUsers" class="d-flex flex-wrap">
                 <!-- Local video -->
                 <div id="me" class="userbox m-1">
                     <h5 class="user-name">Me</h5>
                     <video id="localVideoCtr" autoplay muted playsinline class="video-box"></video>
                 </div>
-
-                <!-- Remote video template -->
+                <!-- Remote videos template -->
                 <div id="remoteTemplate" class="userbox m-1" style="display:none;">
                     <h5 class="user-name"></h5>
                     <video autoplay playsinline class="video-box"></video>
+                    <audio autoplay></audio>
                 </div>
             </div>
         </div>
@@ -49,180 +46,12 @@
         </div>
     </div>
 
-    <!-- Recording -->
+    <!-- Recording Buttons -->
     <div class="mt-3">
         <button id="start-recording" class="btn btn-danger">Start Recording</button>
         <button id="download-video" class="btn btn-success" disabled>Download Recording</button>
     </div>
 </main>
-
-<script>
-$(function() {
-    const socket = io(); // connect to your server.js Socket.IO
-    const urlParams = new URLSearchParams(window.location.search);
-    const meetingID = urlParams.get('meetingID');
-    let userID = urlParams.get('uid');
-    if (!userID) userID = prompt("Enter your nickname");
-
-    if (!meetingID || !userID) {
-        alert("Meeting ID or user missing");
-        window.location.href = "/sign";
-    }
-
-    const localVideo = document.getElementById('localVideoCtr');
-    const divUsers = document.getElementById('divUsers');
-    const remoteTemplate = document.getElementById('remoteTemplate');
-
-    let localStream;
-    let peers = {};
-    let mediaRecorder;
-    let recordedBlobs = [];
-
-    // Get local media
-    async function getLocalMedia() {
-        try {
-            localStream = await navigator.mediaDevices.getUserMedia({video:true, audio:true});
-            localVideo.srcObject = localStream;
-        } catch(err) {
-            console.error("Error accessing camera/mic:", err);
-            alert("Unable to access camera or microphone");
-        }
-    }
-
-    // Create peer connection
-    function createPeerConnection(peerID, peerName) {
-        const pc = new RTCPeerConnection({
-            iceServers: [{urls:'stun:stun.l.google.com:19302'}]
-        });
-
-        // Add local tracks
-        localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
-
-        // Remote stream
-        const remoteEl = remoteTemplate.cloneNode(true);
-        remoteEl.id = 'remote_' + peerID;
-        remoteEl.querySelector('h5').textContent = peerName;
-        remoteEl.style.display = 'block';
-        divUsers.appendChild(remoteEl);
-        const remoteVideo = remoteEl.querySelector('video');
-
-        pc.ontrack = (event) => {
-            remoteVideo.srcObject = event.streams[0];
-        }
-
-        // ICE candidate
-        pc.onicecandidate = (event) => {
-            if (event.candidate) {
-                socket.emit('ice-candidate', {to:peerID, candidate:event.candidate});
-            }
-        }
-
-        return pc;
-    }
-
-    // Join room
-    socket.emit('join-room', {meetingID, userID});
-
-    // New participant
-    socket.on('new-participant', ({peerID, peerName}) => {
-        const pc = createPeerConnection(peerID, peerName);
-        peers[peerID] = pc;
-
-        // Create offer
-        pc.createOffer().then(offer => {
-            pc.setLocalDescription(offer);
-            socket.emit('offer', {to: peerID, from: userID, sdp: offer});
-        });
-    });
-
-    // Receive offer
-    socket.on('offer', async ({from, sdp, name}) => {
-        const pc = createPeerConnection(from, name);
-        peers[from] = pc;
-        await pc.setRemoteDescription(new RTCSessionDescription(sdp));
-        const answer = await pc.createAnswer();
-        await pc.setLocalDescription(answer);
-        socket.emit('answer', {to: from, from: userID, sdp: answer});
-    });
-
-    // Receive answer
-    socket.on('answer', async ({from, sdp}) => {
-        const pc = peers[from];
-        await pc.setRemoteDescription(new RTCSessionDescription(sdp));
-    });
-
-    // ICE candidate
-    socket.on('ice-candidate', async ({from, candidate}) => {
-        const pc = peers[from];
-        if(pc) pc.addIceCandidate(new RTCIceCandidate(candidate));
-    });
-
-    // Remove participant
-    socket.on('participant-left', ({peerID}) => {
-        const pc = peers[peerID];
-        if(pc) pc.close();
-        delete peers[peerID];
-        const el = document.getElementById('remote_' + peerID);
-        if(el) el.remove();
-    });
-
-    // Chat
-    $('#btnSendMsg').on('click', function() {
-        const msg = $('#msgbox').val();
-        if(msg.trim() === "") return;
-        socket.emit('sendMessage', {meetingID, userID, message: msg});
-        $('#msgbox').val('');
-    });
-
-    socket.on('newMessage', ({user, message}) => {
-        $('#messages').append(`<div><b>${user}:</b> ${message}</div>`);
-        $('#messages').scrollTop($('#messages')[0].scrollHeight);
-    });
-
-    // Participants list
-    socket.on('participantsList', (list) => {
-        $('#participantsList').empty();
-        list.forEach(p => $('#participantsList').append(`<li class="list-group-item">${p}</li>`));
-    });
-
-    // Recording
-    $('#start-recording').on('click', async function() {
-        recordedBlobs = [];
-        let combinedStream = new MediaStream([...localStream.getTracks()]);
-        Object.values(peers).forEach(pc => {
-            pc.getReceivers().forEach(r => {
-                if(r.track) combinedStream.addTrack(r.track);
-            });
-        });
-
-        mediaRecorder = new MediaRecorder(combinedStream, {mimeType: 'video/webm; codecs=vp9,opus'});
-        mediaRecorder.ondataavailable = (e) => { if(e.data.size > 0) recordedBlobs.push(e.data); };
-        mediaRecorder.start();
-        $(this).text('Stop Recording');
-        $(this).off('click').on('click', stopRecording);
-    });
-
-    function stopRecording() {
-        mediaRecorder.stop();
-        $('#start-recording').text('Start Recording').off('click').on('click', async function(){ $('#start-recording').click(); });
-        $('#download-video').prop('disabled', false);
-    }
-
-    $('#download-video').on('click', function() {
-        const blob = new Blob(recordedBlobs, {type:'video/webm'});
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.style.display = 'none';
-        a.href = url;
-        a.download = 'recording.webm';
-        document.body.appendChild(a);
-        a.click();
-        setTimeout(()=>{ document.body.removeChild(a); window.URL.revokeObjectURL(url); }, 100);
-    });
-
-    getLocalMedia();
-});
-</script>
 
 <style>
 .video-box {
@@ -238,5 +67,155 @@ $(function() {
     overflow-y: auto;
 }
 </style>
+
+<script>
+$(function() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const meetingID = urlParams.get('meetingID');
+    let userID = urlParams.get('uid');
+    if (!userID) userID = prompt("Enter your nickname");
+
+    if (!meetingID || !userID) {
+        alert("Meeting ID or user missing");
+        window.location.href = "/sign";
+        return;
+    } 
+
+    $("#meetingContainer").show();
+
+    // Connect to socket.io
+    const socket = io();
+
+    // Local media
+    let localStream;
+    const peers = {}; // { peerID: RTCPeerConnection }
+
+    async function initLocalMedia() {
+        try {
+            localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+            document.getElementById('localVideoCtr').srcObject = localStream;
+        } catch (err) {
+            alert("Could not access camera/mic. Check permissions.");
+            console.error(err);
+        }
+    }
+
+    initLocalMedia();
+
+    // Join meeting
+    socket.emit('join-meeting', { meetingID, userID });
+
+    socket.on('user-joined', async ({ peerID, userName }) => {
+        console.log("User joined:", userName, peerID);
+        const pc = createPeerConnection(peerID, userName);
+        peers[peerID] = pc;
+
+        // Add local tracks
+        localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+
+        // Create offer
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+        socket.emit('offer', { to: peerID, from: socket.id, sdp: offer, userName });
+    });
+
+    socket.on('offer', async ({ from, sdp, userName }) => {
+        const pc = createPeerConnection(from, userName);
+        peers[from] = pc;
+        localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+        await pc.setRemoteDescription(new RTCSessionDescription(sdp));
+        const answer = await pc.createAnswer();
+        await pc.setLocalDescription(answer);
+        socket.emit('answer', { to: from, from: socket.id, sdp: answer });
+    });
+
+    socket.on('answer', async ({ from, sdp }) => {
+        await peers[from].setRemoteDescription(new RTCSessionDescription(sdp));
+    });
+
+    socket.on('ice-candidate', async ({ from, candidate }) => {
+        try {
+            await peers[from].addIceCandidate(new RTCIceCandidate(candidate));
+        } catch (err) {
+            console.error(err);
+        }
+    });
+
+    function createPeerConnection(peerID, userName) {
+        const pc = new RTCPeerConnection({
+            iceServers: [{ urls: "stun:stun.l.google.com:19302" }]
+        });
+
+        pc.onicecandidate = (event) => {
+            if (event.candidate) {
+                socket.emit('ice-candidate', { to: peerID, candidate: event.candidate });
+            }
+        };
+
+        pc.ontrack = (event) => {
+            let remoteDiv = document.getElementById(peerID);
+            if (!remoteDiv) {
+                const template = document.getElementById('remoteTemplate');
+                remoteDiv = template.cloneNode(true);
+                remoteDiv.id = peerID;
+                remoteDiv.querySelector('h5').textContent = userName;
+                remoteDiv.style.display = 'block';
+                document.getElementById('divUsers').appendChild(remoteDiv);
+            }
+            const videoEl = remoteDiv.querySelector('video');
+            videoEl.srcObject = event.streams[0];
+
+            const audioEl = remoteDiv.querySelector('audio');
+            if (audioEl) audioEl.srcObject = event.streams[0];
+        };
+
+        return pc;
+    }
+
+    // Chat
+    $("#btnSendMsg").on("click", function() {
+        const msg = $("#msgbox").val();
+        if(msg.trim() !== "") {
+            socket.emit("sendMessage", { meetingID, userID, message: msg });
+            $("#messages").append(`<div><strong>Me:</strong> ${msg}</div>`);
+            $("#msgbox").val("");
+        }
+    });
+
+    socket.on("receiveMessage", ({ userName, message }) => {
+        $("#messages").append(`<div><strong>${userName}:</strong> ${message}</div>`);
+    });
+
+    // Recording
+    let mediaRecorder;
+    let recordedBlobs;
+
+    $("#start-recording").on("click", async function() {
+        if(!mediaRecorder || mediaRecorder.state === 'inactive') {
+            recordedBlobs = [];
+            mediaRecorder = new MediaRecorder(localStream, { mimeType: 'video/webm; codecs=vp9' });
+            mediaRecorder.ondataavailable = (event) => { if(event.data.size>0) recordedBlobs.push(event.data); };
+            mediaRecorder.start();
+            $(this).text('Stop Recording');
+            $("#download-video").prop('disabled', true);
+        } else {
+            mediaRecorder.stop();
+            $(this).text('Start Recording');
+            $("#download-video").prop('disabled', false);
+        }
+    });
+
+    $("#download-video").on("click", function() {
+        const blob = new Blob(recordedBlobs, { type: 'video/webm' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'recording.webm';
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(() => { document.body.removeChild(a); window.URL.revokeObjectURL(url); }, 100);
+    });
+});
+</script>
 </body>
 </html>
