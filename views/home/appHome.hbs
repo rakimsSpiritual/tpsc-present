@@ -65,6 +65,20 @@
             font-size: 14px;
             display: none;
         }
+        
+        /* Video Elements */
+        #localVideo {
+            width: 200px;
+            height: 150px;
+            background: black;
+            margin: 10px;
+        }
+        #remoteVideo {
+            width: 100%;
+            height: auto;
+            max-height: 70vh;
+            background: black;
+        }
     </style>
 </head>
 <body>
@@ -78,7 +92,7 @@
         </div>
     </div>
 
-    <!-- Your Existing Content (hidden initially) -->
+    <!-- Main App Content -->
     <div id="mainContent" style="display:none;">
         <div class="header-bar">
             <div style="font-weight:bold;">TPSC Video Classroom Session</div>
@@ -92,8 +106,30 @@
 
         <div class="main-wrap">
             <div class="call-wrap card" style="z-index: 99">
-                <div class="action-wrap" style="display: flex;justify-content: center; align-items: center;padding:30px;">
-                    <div style="display:flex; justify-content:center;align-items:center;background-color:#00554d;height:50px;max-width:200px;min-width:200px;font-size:20px;align-self:center;color:white;border-radius:5px;cursor:pointer;" class="join-meeting">Join Classroom</div>
+                <div class="action-wrap" style="padding:30px;">
+                    <!-- Video Elements -->
+                    <div style="display: flex; flex-wrap: wrap;">
+                        <div>
+                            <video id="localVideo" autoplay muted></video>
+                            <div id="localUsername"></div>
+                        </div>
+                        <div style="flex-grow: 1;">
+                            <video id="remoteVideo" autoplay></video>
+                        </div>
+                    </div>
+                    
+                    <!-- Controls -->
+                    <div style="display: flex; justify-content: center; gap: 20px; margin-top: 20px;">
+                        <button id="muteBtn" class="btn">
+                            <i class="material-icons">mic</i>
+                        </button>
+                        <button id="videoBtn" class="btn">
+                            <i class="material-icons">videocam</i>
+                        </button>
+                        <button id="endCallBtn" class="btn red">
+                            <i class="material-icons">call_end</i>
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -130,6 +166,11 @@
                     $('#location').text(`Location: ${data.city}, ${data.country_name}`);
                 });
 
+            // Variables for media streams
+            let localStream;
+            let currentRoom;
+            let currentUser;
+            
             // Nickname Handling
             const urlParams = new URLSearchParams(window.location.search);
             const meeting_id = urlParams.get('meetingID');
@@ -204,17 +245,60 @@
                 initializeApp(meeting_id, user_id);
             }
 
-            function initializeApp(meetingId, userId) {
+            async function initializeApp(meetingId, userId) {
                 $('#nicknameOverlay').hide();
                 $('#mainContent').show();
                 $(".username_holder").val(userId);
+                $('#localUsername').text(userId);
                 
-                // Initialize your main app
-                if (typeof MyApp !== 'undefined' && typeof MyApp._init === 'function') {
-                    MyApp._init(userId, meetingId);
-                } else {
-                    console.error("MyApp is not defined");
+                try {
+                    // Get user media
+                    localStream = await navigator.mediaDevices.getUserMedia({
+                        audio: true,
+                        video: true
+                    });
+                    
+                    // Display local video
+                    const localVideo = document.getElementById('localVideo');
+                    localVideo.srcObject = localStream;
+                    
+                    // Set up controls
+                    setupControls();
+                    
+                    // Initialize your main app
+                    if (typeof MyApp !== 'undefined' && typeof MyApp._init === 'function') {
+                        MyApp._init(userId, meetingId, localStream);
+                    } else {
+                        console.error("MyApp is not defined");
+                    }
+                } catch (error) {
+                    console.error('Error accessing media devices:', error);
+                    alert('Could not access camera/microphone. Please check permissions.');
                 }
+            }
+            
+            function setupControls() {
+                // Mute/unmute
+                $('#muteBtn').click(function() {
+                    const isMuted = localStream.getAudioTracks()[0].enabled;
+                    localStream.getAudioTracks()[0].enabled = !isMuted;
+                    $(this).find('i').text(isMuted ? 'mic_off' : 'mic');
+                });
+                
+                // Start/stop video
+                $('#videoBtn').click(function() {
+                    const isVideoOn = localStream.getVideoTracks()[0].enabled;
+                    localStream.getVideoTracks()[0].enabled = !isVideoOn;
+                    $(this).find('i').text(isVideoOn ? 'videocam_off' : 'videocam');
+                });
+                
+                // End call
+                $('#endCallBtn').click(function() {
+                    if (localStream) {
+                        localStream.getTracks().forEach(track => track.stop());
+                    }
+                    window.location.href = '/';
+                });
             }
         });
     </script>
