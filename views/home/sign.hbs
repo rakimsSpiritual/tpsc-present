@@ -1,13 +1,18 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
     <meta charset="UTF-8">
-    <title>Join Classroom</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TPSC Video Classroom</title>
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
-    <link rel="stylesheet" href="./../../materialize.min.css">
-    <link rel="stylesheet" href="./../../stylee.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css">
     <style>
+        :root {
+            --primary-color: #00554d;
+            --secondary-color: #003d36;
+            --accent-color: #d32f2f;
+        }
+        
         body {
             margin: 0;
             font-family: 'Segoe UI', sans-serif;
@@ -15,6 +20,7 @@
             background-size: cover;
             background-position: center;
             background-attachment: fixed;
+            min-height: 100vh;
         }
 
         .header-bar {
@@ -25,23 +31,101 @@
             justify-content: space-between;
             align-items: center;
             font-size: 14px;
-        }
-
-        .header-bar div {
-            margin: 0 10px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
         }
 
         .main-wrap {
             margin-top: 20px;
+            padding: 20px;
         }
 
-        #chat-area::-webkit-scrollbar {
-            display: none;
-        }
-
-        .info-group {
+        .video-container {
             display: flex;
-            gap: 15px;
+            flex-wrap: wrap;
+            gap: 20px;
+            justify-content: center;
+        }
+
+        .video-box {
+            background: black;
+            border-radius: 8px;
+            overflow: hidden;
+            position: relative;
+            min-width: 300px;
+            max-width: 600px;
+            flex-grow: 1;
+        }
+
+        .video-box h3 {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            color: white;
+            background: rgba(0,0,0,0.5);
+            padding: 5px 10px;
+            border-radius: 4px;
+            margin: 0;
+            font-size: 14px;
+        }
+
+        video {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+
+        .controls {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: rgba(0, 85, 77, 0.9);
+            padding: 15px;
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            z-index: 100;
+        }
+
+        .control-btn {
+            background: rgba(255,255,255,0.2);
+            border: none;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            color: white;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s;
+        }
+
+        .control-btn:hover {
+            background: rgba(255,255,255,0.3);
+        }
+
+        .control-btn.end-call {
+            background: var(--accent-color);
+        }
+
+        .control-btn.end-call:hover {
+            background: #b71c1c;
+        }
+
+        .join-container {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            max-width: 500px;
+            margin: 0 auto;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+        }
+
+        .error-message {
+            color: var(--accent-color);
+            text-align: center;
+            margin-top: 15px;
         }
 
         @media screen and (max-width: 600px) {
@@ -49,15 +133,17 @@
                 flex-direction: column;
                 text-align: center;
             }
-
-            .info-group {
+            
+            .video-container {
                 flex-direction: column;
-                align-items: center;
+            }
+            
+            .video-box {
+                width: 100%;
             }
         }
     </style>
 </head>
-
 <body>
     <div class="header-bar">
         <div style="font-weight:bold;">TPSC Video Classroom Session</div>
@@ -70,71 +156,281 @@
     </div>
 
     <div class="main-wrap">
-        <div class="call-wrap card" style="z-index: 99">
-            <div class="action-wrap" style="display: flex;justify-content: center; align-items: center;padding:30px;">
-                <div style="display:flex; justify-content:center;align-items:center;background-color:#00554d;height:50px;max-width:200px;min-width:200px;font-size:20px;align-self:center;color:white;border-radius:5px;cursor:pointer;" class="join-meeting">Join Classroom</div>
+        <div id="joinSection">
+            <div class="join-container">
+                <h4 class="center-align">Join Classroom Session</h4>
+                <div class="row">
+                    <form class="col s12" id="joinForm">
+                        <div class="row">
+                            <div class="input-field col s12">
+                                <i class="material-icons prefix">meeting_room</i>
+                                <input id="meetingId" type="text" class="validate" required>
+                                <label for="meetingId">Meeting ID</label>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="input-field col s12">
+                                <i class="material-icons prefix">person</i>
+                                <input id="userName" type="text" class="validate" required>
+                                <label for="userName">Your Name</label>
+                            </div>
+                        </div>
+                        <div class="row center-align">
+                            <button class="btn waves-effect waves-light" type="submit" style="background-color: var(--primary-color)">
+                                Join Session <i class="material-icons right">send</i>
+                            </button>
+                        </div>
+                        <div id="errorDisplay" class="error-message"></div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div id="videoSection" style="display: none;">
+            <div class="video-container" id="videoContainer">
+                <!-- Local video will be added here -->
             </div>
         </div>
     </div>
 
-    <!-- Scripts -->
+    <div class="controls" style="display: none;">
+        <button class="control-btn" id="muteBtn">
+            <i class="material-icons">mic</i>
+        </button>
+        <button class="control-btn" id="videoBtn">
+            <i class="material-icons">videocam</i>
+        </button>
+        <button class="control-btn end-call" id="endCallBtn">
+            <i class="material-icons">call_end</i>
+        </button>
+    </div>
+
     <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
-    <script src="assets/js/materialize.min.js"></script>
-    <script src="assets/js/client.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
+    <script src="https://cdn.socket.io/4.4.1/socket.io.min.js"></script>
     <script>
+        // Global variables
+        let localStream;
+        let currentMeetingId;
+        let currentUserName;
+        let socket;
+        
+        // Initialize clock
         function updateTime() {
             const now = new Date();
             const clock = now.toLocaleTimeString();
-            const day = now.toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-            document.getElementById('clock').textContent = `Time: ${clock}`;
-            document.getElementById('day').textContent = `Date: ${day}`;
+            const day = now.toLocaleDateString(undefined, { 
+                weekday: 'long', 
+                year: 'numeric', 
+                month: 'long', 
+                day: 'numeric' 
+            });
+            $('#clock').text(`Time: ${clock}`);
+            $('#day').text(`Date: ${day}`);
         }
         setInterval(updateTime, 1000);
         updateTime();
 
+        // Get IP information
         fetch('https://ipapi.co/json/')
             .then(res => res.json())
             .then(data => {
-                document.getElementById('ip').textContent = `IP: ${data.ip}`;
-                document.getElementById('location').textContent = `Location: ${data.city}, ${data.country_name}`;
+                $('#ip').text(`IP: ${data.ip}`);
+                $('#location').text(`Location: ${data.city}, ${data.country_name}`);
+            })
+            .catch(() => {
+                $('#ip').text(`IP: Unknown`);
+                $('#location').text(`Location: Unknown`);
             });
 
-        $(function () {
+        // Handle form submission
+        $('#joinForm').submit(async function(e) {
+            e.preventDefault();
+            
+            currentMeetingId = $('#meetingId').val().trim();
+            currentUserName = $('#userName').val().trim();
+            
+            if (!currentMeetingId || !currentUserName) {
+                showError('Please enter both meeting ID and your name');
+                return;
+            }
+            
+            try {
+                // Get user media with proper error handling
+                localStream = await getMediaWithFallback();
+                
+                // Initialize video session
+                initVideoSession();
+                
+                // Connect to signaling server
+                connectToSignalingServer();
+                
+            } catch (error) {
+                console.error('Error initializing session:', error);
+                showError('Failed to initialize video session. Please check your permissions and try again.');
+            }
+        });
+
+        // Improved media acquisition with fallback
+        async function getMediaWithFallback() {
+            try {
+                // Try with both audio and video first
+                return await navigator.mediaDevices.getUserMedia({
+                    audio: true,
+                    video: true
+                });
+            } catch (videoError) {
+                console.warn('Video access failed, trying audio only:', videoError);
+                try {
+                    // Try with audio only
+                    const audioOnlyStream = await navigator.mediaDevices.getUserMedia({
+                        audio: true,
+                        video: false
+                    });
+                    showError('Video is not available, continuing with audio only');
+                    return audioOnlyStream;
+                } catch (audioError) {
+                    console.error('Audio access failed:', audioError);
+                    throw new Error('Could not access any media devices');
+                }
+            }
+        }
+
+        function initVideoSession() {
+            // Hide join section, show video section
+            $('#joinSection').hide();
+            $('#videoSection').show();
+            $('.controls').show();
+            
+            // Clear any previous error
+            $('#errorDisplay').text('');
+            
+            // Add local video
+            const localVideoBox = `
+                <div class="video-box">
+                    <video id="localVideo" autoplay muted playsinline></video>
+                    <h3>${currentUserName} (You)</h3>
+                </div>
+            `;
+            $('#videoContainer').append(localVideoBox);
+            
+            // Set local video stream
+            const localVideo = document.getElementById('localVideo');
+            localVideo.srcObject = localStream;
+            
+            // Initialize controls
+            initControls();
+        }
+
+        function connectToSignalingServer() {
+            // Replace with your actual server URL
+            const serverUrl = 'https://your-signaling-server.com';
+            
+            // Initialize Socket.io connection with proper options
+            socket = io(serverUrl, {
+                transports: ['websocket'],
+                reconnectionAttempts: 5,
+                reconnectionDelay: 1000,
+                timeout: 20000
+            });
+            
+            // Connection event handlers
+            socket.on('connect', () => {
+                console.log('Connected to signaling server');
+                socket.emit('join-room', {
+                    roomId: currentMeetingId,
+                    userName: currentUserName
+                });
+            });
+            
+            socket.on('connect_error', (error) => {
+                console.error('Connection error:', error);
+                showError('Could not connect to the server. Please try again later.');
+            });
+            
+            socket.on('disconnect', (reason) => {
+                console.log('Disconnected:', reason);
+                if (reason === 'io server disconnect') {
+                    showError('Disconnected from server. Please refresh the page.');
+                }
+            });
+            
+            // Add other necessary socket event handlers here
+            // (peer connection, ice candidates, etc.)
+        }
+
+        function initControls() {
+            // Mute/unmute
+            $('#muteBtn').click(function() {
+                if (localStream.getAudioTracks().length > 0) {
+                    const isMuted = localStream.getAudioTracks()[0].enabled;
+                    localStream.getAudioTracks()[0].enabled = !isMuted;
+                    $(this).find('i').text(isMuted ? 'mic_off' : 'mic');
+                    showToast(isMuted ? 'Microphone muted' : 'Microphone unmuted');
+                }
+            });
+            
+            // Start/stop video
+            $('#videoBtn').click(function() {
+                if (localStream.getVideoTracks().length > 0) {
+                    const isVideoOn = localStream.getVideoTracks()[0].enabled;
+                    localStream.getVideoTracks()[0].enabled = !isVideoOn;
+                    $(this).find('i').text(isVideoOn ? 'videocam_off' : 'videocam');
+                    showToast(isVideoOn ? 'Video stopped' : 'Video started');
+                }
+            });
+            
+            // End call
+            $('#endCallBtn').click(function() {
+                endCall();
+            });
+        }
+
+        function endCall() {
+            // Stop all media tracks
+            if (localStream) {
+                localStream.getTracks().forEach(track => track.stop());
+            }
+            
+            // Disconnect from signaling server
+            if (socket) {
+                socket.disconnect();
+            }
+            
+            // Reset UI
+            $('#videoSection').hide();
+            $('.controls').hide();
+            $('#joinSection').show();
+            $('#videoContainer').empty();
+            
+            showToast('You have left the classroom');
+        }
+
+        function showError(message) {
+            $('#errorDisplay').text(message);
+        }
+
+        function showToast(message) {
+            M.toast({html: message});
+        }
+
+        // Check for meeting ID in URL
+        $(document).ready(function() {
             const urlParams = new URLSearchParams(window.location.search);
-            var meeting_id = urlParams.get('meetingID');
-
-            if (!meeting_id) {
-                $(document).on("click", ".join-meeting", function () {
-                    $(".action-wrap").empty().html('<div class="row"> <form class="col s12"> <a href="/sign"><i class="material-icons prefix">arrow_back</i></a><div class="row"> <div class="input-field col s6" style="width: 100%;"> <i class="material-icons prefix">call_to_action</i> <input id="icon_prefix" type="text" class="validate join-value"> <label for="icon_prefix">Meeting ID [Without Space]</label> </div> </div> <button class="btn waves-effect waves-light teal darken-2 join-submit" type="submit" name="action">Join<i class="material-icons right">send</i></button></form> </div>');
-                });
-
-                $(document).on("click", ".join-submit", function (e) {
-                    e.preventDefault();
-                    var join_value = $("input.join-value").val();
-                    var meetingUrl = window.location.origin + "?meetingID=" + join_value;
-                    window.location.replace(meetingUrl);
-                });
-
-                // $(document).on("click", ".host-meeting", function (e) {
-                //     let eight_d_number = Math.floor(Math.random() * 100000000);
-                //     var meetingUrl = window.location.origin + "?meetingID=" + eight_d_number;
-                //     window.location.replace(meetingUrl);
-                // });
-
-                return;
-            } else {
-                $("#remote-video").empty();
+            const meetingId = urlParams.get('meetingID');
+            const userName = urlParams.get('userName');
+            
+            if (meetingId) {
+                $('#meetingId').val(meetingId);
             }
-
-            var user_id = urlParams.get('uid');
-            if (!user_id) {
-                user_id = window.prompt('Enter your nickname!');
+            
+            if (userName) {
+                $('#userName').val(decodeURIComponent(userName));
             }
-
-            if (!user_id || !meeting_id) {
-               // alert('user id or meeting id missing');
-                return;
-            }
+            
+            // Initialize Materialize components
+            M.AutoInit();
         });
     </script>
 </body>
+</html>
