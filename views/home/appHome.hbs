@@ -1,22 +1,17 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
     <meta charset="UTF-8">
     <title>TeLis Video Classroom</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-    <!-- CSS Libraries -->
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
     <link rel="stylesheet" href="/bootstrap.min.css">
     <link rel="stylesheet" href="/style.css">
-
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
     <script src="/socket.io/socket.io.js"></script>
 </head>
-
 <body>
-<main class="container-fluid home-wrap">
+<main class="container-fluid">
     <h1>TeLis Video Classroom</h1>
     <div class="row">
         <!-- Video Section -->
@@ -56,156 +51,172 @@
 </main>
 
 <style>
-.video-box {
-    width: 250px;
-    height: 180px;
-    background: black;
-}
-.userbox {
-    position: relative;
-}
-#participantsList {
-    max-height: 200px;
-    overflow-y: auto;
-}
+    .video-box {
+        width: 250px;
+        height: 180px;
+        background: black;
+    }
+    .userbox {
+        position: relative;
+    }
+    #participantsList {
+        max-height: 200px;
+        overflow-y: auto;
+    }
 </style>
 
 <script>
-$(function() {
+$(function(){
+    const socket = io();
     const urlParams = new URLSearchParams(window.location.search);
     const meetingID = urlParams.get('meetingID');
-    let userID = urlParams.get('uid');
-    if(!userID) userID = prompt("Enter your nickname");
+    let userID = urlParams.get('uid') || prompt("Enter your nickname");
 
     if(!meetingID || !userID){
         alert("Meeting ID or user missing");
         window.location.href = "/sign";
         return;
     }
+
     $("#meetingContainer").show();
 
-    // ===================== WebRTC + Socket.IO =====================
-    const socket = io();
-
-    const peers = {}; // keep track of peers
-    const localVideo = document.getElementById('localVideoCtr');
     let localStream;
+    let peers = {};
 
-    async function initLocalStream() {
-        try {
-            localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-            localVideo.srcObject = localStream;
-        } catch(err) {
-            console.error("Error accessing media devices.", err);
-            alert("Please allow camera and microphone access");
+    // ICE servers for better connectivity
+    const iceServers = [
+        { urls: "stun:stun.l.google.com:19302" },
+        { urls: "turn:TURN_SERVER_IP", username: "user", credential: "pass" } // replace with your TURN
+    ];
+
+    // Get local media
+    async function initLocalStream(){
+        try{
+            localStream = await navigator.mediaDevices.getUserMedia({ video:true, audio:true });
+            $("#localVideoCtr")[0].srcObject = localStream;
+        } catch(err){
+            alert("Cannot access camera/mic: "+err);
         }
     }
 
-    initLocalStream().then(() => {
+    // Initialize
+    initLocalStream().then(()=>{
         socket.emit("joinMeeting", { meetingID, userID });
     });
 
-    socket.on("existingParticipants", users => {
-        users.forEach(user => createOffer(user));
-    });
-
-    socket.on("newParticipant", user => {
-        createOffer(user);
-    });
-
-    socket.on("signal", async data => {
-        const { from, signal } = data;
-        if (!peers[from]) {
-            await createPeer(from, false);
-        }
-        peers[from].signal(signal);
-    });
-
-    async function createOffer(peerID) {
-        const peer = await createPeer(peerID, true);
-        peers[peerID] = peer;
-    }
-
-    async function createPeer(peerID, initiator) {
+    // Create a new peer
+    function createPeer(targetID, initiator){
         const peer = new SimplePeer({
-            initiator: initiator,
+            initiator,
             trickle: false,
-            stream: localStream
+            stream: localStream,
+            config: { iceServers }
         });
 
-        peer.on("signal", signal => {
-            socket.emit("signal", { to: peerID, from: userID, signal });
+        peer.on('signal', data=>{
+            socket.emit('signal', { targetID, fromID: userID, signal: data });
         });
 
-        peer.on("stream", stream => {
-            addRemoteVideo(peerID, stream);
+        peer.on('stream', stream=>{
+            addRemoteStream(targetID, stream);
         });
 
-        peer.on("error", err => console.error(err));
         return peer;
     }
 
-    function addRemoteVideo(id, stream) {
-        if(document.getElementById(id)) return;
-        const template = document.getElementById('remoteTemplate');
-        const clone = template.cloneNode(true);
-        clone.id = id;
-        clone.style.display = "block";
-        clone.querySelector('video').srcObject = stream;
-        clone.querySelector('h5').textContent = id;
-        document.getElementById('divUsers').appendChild(clone);
+    // Add remote video
+    function addRemoteStream(id, stream){
+        let elem = document.getElementById(id);
+        if(!elem){
+            const template = $("#remoteTemplate").clone();
+            template.attr("id", id).show();
+            template.find("h5").text(id);
+            template.find("video")[0].srcObject = stream;
+            $("#divUsers").append(template);
+        } else {
+            elem.querySelector("video").srcObject = stream;
+        }
     }
 
-    // ===================== Chat =====================
-    socket.on("receiveMessage", data => {
-        const msgDiv = document.createElement("div");
-        msgDiv.textContent = `${data.user}: ${data.msg}`;
-        document.getElementById("messages").appendChild(msgDiv);
-        document.getElementById("messages").scrollTop = document.getElementById("messages").scrollHeight;
+    // Participant list update
+    function updateParticipants(){
+        $("#participantsList").empty();
+        for(let id in peers) $("#participantsList").append("<li class='list-group-item'>"+id+"</li>");
+        $("#participantsList").append("<li class='list-group-item'>Me: "+userID+"</li>");
+    }
+
+    // Receive signaling data
+    socket.on("signal", ({fromID, signal})=>{
+        if(!peers[fromID]){
+            peers[fromID] = createPeer(fromID, false);
+        }
+        peers[fromID].signal(signal);
     });
 
-    $("#btnSendMsg").on("click", function(){
-        const msg = $("#msgbox").val();
-        if(msg.trim() !== ""){
-            socket.emit("sendMessage", { user: userID, msg });
+    // New participant
+    socket.on("newParticipant", ({id})=>{
+        peers[id] = createPeer(id, true);
+        updateParticipants();
+    });
+
+    // Participant left
+    socket.on("participantLeft", id=>{
+        if(peers[id]){
+            peers[id].destroy();
+            delete peers[id];
+        }
+        const elem = document.getElementById(id);
+        if(elem) elem.remove();
+        updateParticipants();
+    });
+
+    // Chat messages
+    socket.on("message", ({from, text})=>{
+        $("#messages").append("<div><b>"+from+":</b> "+text+"</div>");
+        $("#messages").scrollTop($("#messages")[0].scrollHeight);
+    });
+
+    $("#btnSendMsg").on("click", ()=>{
+        const msg = $("#msgbox").val().trim();
+        if(msg!==""){
+            socket.emit("sendMessage", {meetingID, from:userID, text:msg});
             $("#msgbox").val("");
         }
     });
 
-    // ===================== Recording =====================
-    let mediaRecorder;
-    let recordedBlobs = [];
-
-    $("#start-recording").on("click", async function(){
-        if(this.textContent === "Start Recording"){
-            recordedBlobs = [];
-            mediaRecorder = new MediaRecorder(localStream, { mimeType: 'video/webm; codecs=vp9' });
-            mediaRecorder.ondataavailable = e => { if(e.data.size > 0) recordedBlobs.push(e.data); };
+    // Recording (optional)
+    let mediaRecorder, recordedBlobs;
+    $("#start-recording").on("click", async ()=>{
+        if($("#start-recording").text()==="Start Recording"){
+            recordedBlobs=[];
+            mediaRecorder = new MediaRecorder(localStream, {mimeType:'video/webm;codecs=vp8,opus'});
+            mediaRecorder.ondataavailable = e=>{ if(e.data && e.data.size>0) recordedBlobs.push(e.data); };
             mediaRecorder.start();
-            this.textContent = "Stop Recording";
-            $("#download-video").prop("disabled", true);
+            $("#start-recording").text("Stop Recording");
+            $("#download-video").prop("disabled",true);
         } else {
             mediaRecorder.stop();
-            this.textContent = "Start Recording";
-            $("#download-video").prop("disabled", false);
+            $("#start-recording").text("Start Recording");
+            $("#download-video").prop("disabled",false);
         }
     });
 
-    $("#download-video").on("click", function(){
-        const blob = new Blob(recordedBlobs, { type: 'video/webm' });
+    $("#download-video").on("click", ()=>{
+        const blob = new Blob(recordedBlobs,{type:'video/webm'});
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
-        a.style.display = 'none';
-        a.href = url;
-        a.download = 'recording.webm';
+        a.style.display='none';
+        a.href=url;
+        a.download='recording.webm';
         document.body.appendChild(a);
         a.click();
-        window.URL.revokeObjectURL(url);
+        setTimeout(()=>{document.body.removeChild(a); window.URL.revokeObjectURL(url);},100);
     });
+
 });
 </script>
 
-<!-- SimplePeer -->
+<!-- SimplePeer CDN -->
 <script src="https://unpkg.com/simple-peer@9.11.1/simplepeer.min.js"></script>
 </body>
 </html>
