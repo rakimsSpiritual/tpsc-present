@@ -4,20 +4,21 @@
     <meta charset="UTF-8">
     <title>TeLis Video Classroom</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
     <!-- CSS Libraries -->
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
     <link rel="stylesheet" href="/bootstrap.min.css">
     <link rel="stylesheet" href="/style.css">
+
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
     <script src="/socket.io/socket.io.js"></script>
 </head>
 <body>
-<main class="container-fluid d-flex flex-column home-wrap">
+<main class="container-fluid">
     <h1>TeLis Video Classroom</h1>
-
     <div class="row">
         <!-- Video Section -->
-        <div class="col-md-9" id="meetingContainer" style="display:none;">
+        <div class="col-md-9" id="meetingContainer">
             <div id="divUsers" class="d-flex flex-wrap">
                 <!-- Local video -->
                 <div id="me" class="userbox m-1">
@@ -28,7 +29,6 @@
                 <div id="remoteTemplate" class="userbox m-1" style="display:none;">
                     <h5 class="user-name"></h5>
                     <video autoplay playsinline class="video-box"></video>
-                    <audio autoplay></audio>
                 </div>
             </div>
         </div>
@@ -54,168 +54,45 @@
 </main>
 
 <style>
-.video-box {
-    width: 250px;
-    height: 180px;
-    background: black;
-}
-.userbox {
-    position: relative;
-}
-#participantsList {
-    max-height: 200px;
-    overflow-y: auto;
-}
+    .video-box {
+        width: 250px;
+        height: 180px;
+        background: black;
+    }
+    .userbox {
+        position: relative;
+    }
+    #participantsList {
+        max-height: 200px;
+        overflow-y: auto;
+    }
 </style>
 
+<script src="/app.js"></script>
 <script>
-$(function() {
-    const urlParams = new URLSearchParams(window.location.search);
-    const meetingID = urlParams.get('meetingID');
-    let userID = urlParams.get('uid');
-    if (!userID) userID = prompt("Enter your nickname");
+    $(function() {
+        const urlParams = new URLSearchParams(window.location.search);
+        const meetingID = urlParams.get('meetingID');
+        let userID = urlParams.get('uid');
+        if (!userID) userID = prompt("Enter your nickname");
 
-    if (!meetingID || !userID) {
-        alert("Meeting ID or user missing");
-        window.location.href = "/sign";
-        return;
-    } 
-
-    $("#meetingContainer").show();
-
-    // Connect to socket.io
-    const socket = io();
-
-    // Local media
-    let localStream;
-    const peers = {}; // { peerID: RTCPeerConnection }
-
-    async function initLocalMedia() {
-        try {
-            localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-            document.getElementById('localVideoCtr').srcObject = localStream;
-        } catch (err) {
-            alert("Could not access camera/mic. Check permissions.");
-            console.error(err);
-        }
-    }
-
-    initLocalMedia();
-
-    // Join meeting
-    socket.emit('join-meeting', { meetingID, userID });
-
-    socket.on('user-joined', async ({ peerID, userName }) => {
-        console.log("User joined:", userName, peerID);
-        const pc = createPeerConnection(peerID, userName);
-        peers[peerID] = pc;
-
-        // Add local tracks
-        localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
-
-        // Create offer
-        const offer = await pc.createOffer();
-        await pc.setLocalDescription(offer);
-        socket.emit('offer', { to: peerID, from: socket.id, sdp: offer, userName });
-    });
-
-    socket.on('offer', async ({ from, sdp, userName }) => {
-        const pc = createPeerConnection(from, userName);
-        peers[from] = pc;
-        localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
-        await pc.setRemoteDescription(new RTCSessionDescription(sdp));
-        const answer = await pc.createAnswer();
-        await pc.setLocalDescription(answer);
-        socket.emit('answer', { to: from, from: socket.id, sdp: answer });
-    });
-
-    socket.on('answer', async ({ from, sdp }) => {
-        await peers[from].setRemoteDescription(new RTCSessionDescription(sdp));
-    });
-
-    socket.on('ice-candidate', async ({ from, candidate }) => {
-        try {
-            await peers[from].addIceCandidate(new RTCIceCandidate(candidate));
-        } catch (err) {
-            console.error(err);
-        }
-    });
-
-    function createPeerConnection(peerID, userName) {
-        const pc = new RTCPeerConnection({
-            iceServers: [{ urls: "stun:stun.l.google.com:19302" }]
-        });
-
-        pc.onicecandidate = (event) => {
-            if (event.candidate) {
-                socket.emit('ice-candidate', { to: peerID, candidate: event.candidate });
-            }
-        };
-
-        pc.ontrack = (event) => {
-            let remoteDiv = document.getElementById(peerID);
-            if (!remoteDiv) {
-                const template = document.getElementById('remoteTemplate');
-                remoteDiv = template.cloneNode(true);
-                remoteDiv.id = peerID;
-                remoteDiv.querySelector('h5').textContent = userName;
-                remoteDiv.style.display = 'block';
-                document.getElementById('divUsers').appendChild(remoteDiv);
-            }
-            const videoEl = remoteDiv.querySelector('video');
-            videoEl.srcObject = event.streams[0];
-
-            const audioEl = remoteDiv.querySelector('audio');
-            if (audioEl) audioEl.srcObject = event.streams[0];
-        };
-
-        return pc;
-    }
-
-    // Chat
-    $("#btnSendMsg").on("click", function() {
-        const msg = $("#msgbox").val();
-        if(msg.trim() !== "") {
-            socket.emit("sendMessage", { meetingID, userID, message: msg });
-            $("#messages").append(`<div><strong>Me:</strong> ${msg}</div>`);
-            $("#msgbox").val("");
-        }
-    });
-
-    socket.on("receiveMessage", ({ userName, message }) => {
-        $("#messages").append(`<div><strong>${userName}:</strong> ${message}</div>`);
-    });
-
-    // Recording
-    let mediaRecorder;
-    let recordedBlobs;
-
-    $("#start-recording").on("click", async function() {
-        if(!mediaRecorder || mediaRecorder.state === 'inactive') {
-            recordedBlobs = [];
-            mediaRecorder = new MediaRecorder(localStream, { mimeType: 'video/webm; codecs=vp9' });
-            mediaRecorder.ondataavailable = (event) => { if(event.data.size>0) recordedBlobs.push(event.data); };
-            mediaRecorder.start();
-            $(this).text('Stop Recording');
-            $("#download-video").prop('disabled', true);
+        if (!meetingID || !userID) {
+            alert("Meeting ID or user missing");
+            window.location.href = "/sign";
         } else {
-            mediaRecorder.stop();
-            $(this).text('Start Recording');
-            $("#download-video").prop('disabled', false);
+            $("#meetingContainer").show();
+            MyApp(userID, meetingID);
         }
-    });
 
-    $("#download-video").on("click", function() {
-        const blob = new Blob(recordedBlobs, { type: 'video/webm' });
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'recording.webm';
-        document.body.appendChild(a);
-        a.click();
-        setTimeout(() => { document.body.removeChild(a); window.URL.revokeObjectURL(url); }, 100);
+        // Chat send
+        $("#btnSendMsg").on("click", function() {
+            const msg = $("#msgbox").val();
+            if(msg.trim() !== "") {
+                socket.emit("sendMessage", msg);
+                $("#msgbox").val("");
+            }
+        });
     });
-});
 </script>
 </body>
 </html>
