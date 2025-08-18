@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <title>TeLis Video Classroom</title>
@@ -13,12 +14,13 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
     <script src="/socket.io/socket.io.js"></script>
 </head>
+
 <body>
-<main class="container-fluid">
+<main class="container-fluid home-wrap">
     <h1>TeLis Video Classroom</h1>
     <div class="row">
         <!-- Video Section -->
-        <div class="col-md-9" id="meetingContainer">
+        <div class="col-md-9" id="meetingContainer" style="display:none">
             <div id="divUsers" class="d-flex flex-wrap">
                 <!-- Local video -->
                 <div id="me" class="userbox m-1">
@@ -54,45 +56,156 @@
 </main>
 
 <style>
-    .video-box {
-        width: 250px;
-        height: 180px;
-        background: black;
-    }
-    .userbox {
-        position: relative;
-    }
-    #participantsList {
-        max-height: 200px;
-        overflow-y: auto;
-    }
+.video-box {
+    width: 250px;
+    height: 180px;
+    background: black;
+}
+.userbox {
+    position: relative;
+}
+#participantsList {
+    max-height: 200px;
+    overflow-y: auto;
+}
 </style>
 
-<script src="/app.js"></script>
 <script>
-    $(function() {
-        const urlParams = new URLSearchParams(window.location.search);
-        const meetingID = urlParams.get('meetingID');
-        let userID = urlParams.get('uid');
-        if (!userID) userID = prompt("Enter your nickname");
+$(function() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const meetingID = urlParams.get('meetingID');
+    let userID = urlParams.get('uid');
+    if(!userID) userID = prompt("Enter your nickname");
 
-        if (!meetingID || !userID) {
-            alert("Meeting ID or user missing");
-            window.location.href = "/sign";
-        } else {
-            $("#meetingContainer").show();
-            MyApp(userID, meetingID);
+    if(!meetingID || !userID){
+        alert("Meeting ID or user missing");
+        window.location.href = "/sign";
+        return;
+    }
+    $("#meetingContainer").show();
+
+    // ===================== WebRTC + Socket.IO =====================
+    const socket = io();
+
+    const peers = {}; // keep track of peers
+    const localVideo = document.getElementById('localVideoCtr');
+    let localStream;
+
+    async function initLocalStream() {
+        try {
+            localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+            localVideo.srcObject = localStream;
+        } catch(err) {
+            console.error("Error accessing media devices.", err);
+            alert("Please allow camera and microphone access");
         }
+    }
 
-        // Chat send
-        $("#btnSendMsg").on("click", function() {
-            const msg = $("#msgbox").val();
-            if(msg.trim() !== "") {
-                socket.emit("sendMessage", msg);
-                $("#msgbox").val("");
-            }
-        });
+    initLocalStream().then(() => {
+        socket.emit("joinMeeting", { meetingID, userID });
     });
+
+    socket.on("existingParticipants", users => {
+        users.forEach(user => createOffer(user));
+    });
+
+    socket.on("newParticipant", user => {
+        createOffer(user);
+    });
+
+    socket.on("signal", async data => {
+        const { from, signal } = data;
+        if (!peers[from]) {
+            await createPeer(from, false);
+        }
+        peers[from].signal(signal);
+    });
+
+    async function createOffer(peerID) {
+        const peer = await createPeer(peerID, true);
+        peers[peerID] = peer;
+    }
+
+    async function createPeer(peerID, initiator) {
+        const peer = new SimplePeer({
+            initiator: initiator,
+            trickle: false,
+            stream: localStream
+        });
+
+        peer.on("signal", signal => {
+            socket.emit("signal", { to: peerID, from: userID, signal });
+        });
+
+        peer.on("stream", stream => {
+            addRemoteVideo(peerID, stream);
+        });
+
+        peer.on("error", err => console.error(err));
+        return peer;
+    }
+
+    function addRemoteVideo(id, stream) {
+        if(document.getElementById(id)) return;
+        const template = document.getElementById('remoteTemplate');
+        const clone = template.cloneNode(true);
+        clone.id = id;
+        clone.style.display = "block";
+        clone.querySelector('video').srcObject = stream;
+        clone.querySelector('h5').textContent = id;
+        document.getElementById('divUsers').appendChild(clone);
+    }
+
+    // ===================== Chat =====================
+    socket.on("receiveMessage", data => {
+        const msgDiv = document.createElement("div");
+        msgDiv.textContent = `${data.user}: ${data.msg}`;
+        document.getElementById("messages").appendChild(msgDiv);
+        document.getElementById("messages").scrollTop = document.getElementById("messages").scrollHeight;
+    });
+
+    $("#btnSendMsg").on("click", function(){
+        const msg = $("#msgbox").val();
+        if(msg.trim() !== ""){
+            socket.emit("sendMessage", { user: userID, msg });
+            $("#msgbox").val("");
+        }
+    });
+
+    // ===================== Recording =====================
+    let mediaRecorder;
+    let recordedBlobs = [];
+
+    $("#start-recording").on("click", async function(){
+        if(this.textContent === "Start Recording"){
+            recordedBlobs = [];
+            mediaRecorder = new MediaRecorder(localStream, { mimeType: 'video/webm; codecs=vp9' });
+            mediaRecorder.ondataavailable = e => { if(e.data.size > 0) recordedBlobs.push(e.data); };
+            mediaRecorder.start();
+            this.textContent = "Stop Recording";
+            $("#download-video").prop("disabled", true);
+        } else {
+            mediaRecorder.stop();
+            this.textContent = "Start Recording";
+            $("#download-video").prop("disabled", false);
+        }
+    });
+
+    $("#download-video").on("click", function(){
+        const blob = new Blob(recordedBlobs, { type: 'video/webm' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.style.display = 'none';
+        a.href = url;
+        a.download = 'recording.webm';
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+    });
+});
 </script>
+
+<!-- SimplePeer -->
+<script src="https://unpkg.com/simple-peer@9.11.1/simplepeer.min.js"></script>
 </body>
 </html>
