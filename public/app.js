@@ -1,123 +1,85 @@
-const socket = io("/");
+let localStream;
+const localVideo = document.getElementById("localVideoCtr");
+let peers = {};
+let socket;
 
-// Store peer connections
-const peerConnections = {};
-let localStream = null;
-let iceConfiguration = { iceServers: [] };
-
-// ===== Load ICE Servers from server (Twilio TURN + STUN) =====
-async function loadIceServers() {
-  try {
-    const res = await fetch("/get-turn-credentials");
-    const servers = await res.json();
-
-    // Always include Google STUN too
-    iceConfiguration.iceServers = [
-      { urls: "stun:stun.l.google.com:19302" },
-      ...servers
-    ];
-
-    console.log("✅ ICE Servers loaded:", iceConfiguration);
-  } catch (err) {
-    console.error("❌ Failed to load ICE servers:", err);
-  }
+async function initMedia() {
+  localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+  localVideo.srcObject = localStream;
 }
 
-// ===== Initialize Local Stream =====
-async function initLocalStream() {
-  try {
-    localStream = await navigator.mediaDevices.getUserMedia({
-      video: true,
-      audio: true
-    });
-    const localVideo = document.getElementById("localVideo");
-    localVideo.srcObject = localStream;
-  } catch (err) {
-    console.error("Error accessing media devices:", err);
-  }
-}
+async function MyApp(user_id, meeting_id) {
+  socket = io();
+  await initMedia();
 
-// ===== Create RTCPeerConnection for new peers =====
-function createPeerConnection(peerId) {
-  const pc = new RTCPeerConnection(iceConfiguration);
+  socket.emit("userconnect", { dsiplayName: user_id, meetingid: meeting_id });
 
-  // Add local tracks
-  localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+  socket.on("informAboutNewConnection", async (data) => {
+    const { other_user_id, connId } = data;
+    await createPeerConnection(connId, other_user_id, true);
+  });
 
-  // Remote track handler
-  pc.ontrack = (event) => {
-    let remoteVideo = document.getElementById(`video-${peerId}`);
-    if (!remoteVideo) {
-      remoteVideo = document.createElement("video");
-      remoteVideo.id = `video-${peerId}`;
-      remoteVideo.autoplay = true;
-      remoteVideo.playsInline = true;
-      document.getElementById("remoteVideos").appendChild(remoteVideo);
-    }
-    remoteVideo.srcObject = event.streams[0];
-  };
+  socket.on("userconnected", (users) => {
+    users.forEach((u) => createPeerConnection(u.connectionId, u.userName, false));
+  });
 
-  // ICE Candidate handler
-  pc.onicecandidate = (event) => {
-    if (event.candidate) {
-      socket.emit("message", {
-        to: peerId,
-        candidate: event.candidate
-      });
-    }
-  };
+  socket.on("exchangeSDP", async (data) => {
+    const { from_connid, message } = data;
+    const pc = peers[from_connid];
+    if (!pc) return;
 
-  return pc;
-}
-
-// ===== Handle socket.io messages =====
-socket.on("message", async (data) => {
-  let pc = peerConnections[data.from];
-
-  if (data.description) {
-    if (!pc) {
-      pc = createPeerConnection(data.from);
-      peerConnections[data.from] = pc;
-    }
-
-    await pc.setRemoteDescription(new RTCSessionDescription(data.description));
-
-    if (data.description.type === "offer") {
-      const answer = await pc.createAnswer();
-      await pc.setLocalDescription(answer);
-      socket.emit("message", {
-        to: data.from,
-        description: pc.localDescription
-      });
-    }
-  } else if (data.candidate) {
-    if (pc) {
-      try {
-        await pc.addIceCandidate(new RTCIceCandidate(data.candidate));
-      } catch (err) {
-        console.error("Error adding ICE candidate:", err);
+    if (message.sdp) {
+      await pc.setRemoteDescription(new RTCSessionDescription(message.sdp));
+      if (message.sdp.type === "offer") {
+        const answer = await pc.createAnswer();
+        await pc.setLocalDescription(answer);
+        socket.emit("exchangeSDP", { to_connid: from_connid, message: { sdp: answer } });
       }
     }
-  }
-});
 
-// ===== When a new peer joins =====
-socket.on("new-peer", async (peerId) => {
-  const pc = createPeerConnection(peerId);
-  peerConnections[peerId] = pc;
-
-  const offer = await pc.createOffer();
-  await pc.setLocalDescription(offer);
-
-  socket.emit("message", {
-    to: peerId,
-    description: pc.localDescription
+    if (message.candidate) {
+      await pc.addIceCandidate(new RTCIceCandidate(message.candidate));
+    }
   });
-});
 
-// ===== Main startup =====
-(async () => {
-  await loadIceServers();   // Load ICE config before anything
-  await initLocalStream();  // Start camera & mic
-  socket.emit("join-room"); // Tell server we joined
-})();
+  socket.on("showChatMessage", (data) => {
+    const chat = document.getElementById("messages");
+    const el = document.createElement("div");
+    el.textContent = `${data.time} - ${data.from}: ${data.message}`;
+    chat.appendChild(el);
+    chat.scrollTop = chat.scrollHeight;
+  });
+
+  socket.on("userDisconnected", (data) => {
+    const el = document.getElementById(data.connId);
+    if (el) el.remove();
+    delete peers[data.connId];
+  });
+}
+
+async function createPeerConnection(connId, userName, isOffer) {
+  const pc = new RTCPeerConnection({ iceServers: [{ urls: "stun:stun.l.google.com:19302" }] });
+
+  localStream.getTracks().forEach((track) => pc.addTrack(track, localStream));
+
+  pc.onicecandidate = (event) => {
+    if (event.candidate) socket.emit("exchangeSDP", { to_connid: connId, message: { candidate: event.candidate } });
+  };
+
+  pc.ontrack = (event) => {
+    let remoteVideoBox = document.getElementById("remoteTemplate").cloneNode(true);
+    remoteVideoBox.id = connId;
+    remoteVideoBox.style.display = "block";
+    remoteVideoBox.querySelector("video").srcObject = event.streams[0];
+    remoteVideoBox.querySelector(".user-name").innerText = userName;
+    document.getElementById("divUsers").appendChild(remoteVideoBox);
+  };
+
+  peers[connId] = pc;
+
+  if (isOffer) {
+    const offer = await pc.createOffer();
+    await pc.setLocalDescription(offer);
+    socket.emit("exchangeSDP", { to_connid: connId, message: { sdp: offer } });
+  }
+}
