@@ -1,6 +1,5 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
 <meta charset="UTF-8">
 <title>TeLis Video Classroom</title>
@@ -35,12 +34,10 @@ body { background:#222; color:#eee; font-family:'Segoe UI',sans-serif; }
 
 <main class="container-fluid d-flex flex-column home-wrap">
     <div id="meetingContainer" style="display:flex; flex-basis:100%;">
-        <!-- Video Section -->
         <div style="flex-basis:75%;">
             <h4 id="meetingname"></h4>
             <div class="call-wrap">
                 <div id="divUsers" class="video-wrap d-flex flex-wrap">
-                    <!-- Local video -->
                     <div id="me" class="userbox">
                         <h6 class="user-name"></h6>
                         <video id="localVideoCtr" autoplay muted playsinline class="video-box"></video>
@@ -49,7 +46,6 @@ body { background:#222; color:#eee; font-family:'Segoe UI',sans-serif; }
             </div>
         </div>
 
-        <!-- Sidebar -->
         <div class="g-right-details-wrap">
             <h6>Participants</h6>
             <ul id="participantsList" class="collection"></ul>
@@ -72,6 +68,7 @@ body { background:#222; color:#eee; font-family:'Segoe UI',sans-serif; }
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 <script src="/socket.io/socket.io.js"></script>
 <script src="https://unpkg.com/mediasoup-client@3/lib/index.js"></script>
+
 <script>
 $(function(){
 const urlParams = new URLSearchParams(window.location.search);
@@ -85,6 +82,7 @@ const peers = {};
 const remoteVideos = {};
 let localStream, mediaRecorder, recordedChunks = [];
 
+// Clock & Location
 function updateTime(){
     const now = new Date();
     $("#clock").text(`Time: ${now.toLocaleTimeString()}`);
@@ -97,6 +95,7 @@ fetch('https://ipapi.co/json/').then(res=>res.json()).then(data=>{
     $("#location").text(`Location: ${data.city}, ${data.country_name}`);
 });
 
+// Initialize Media
 async function initMedia(){
     try {
         localStream = await navigator.mediaDevices.getUserMedia({video:true,audio:true});
@@ -104,6 +103,7 @@ async function initMedia(){
     }catch(err){ alert('Error accessing camera/mic: '+err.message); }
 }
 
+// UI Helpers
 function addRemoteVideo(peerID, stream){
     if(remoteVideos[peerID]) return;
     const div = $('<div class="userbox"><h6 class="user-name"></h6><video autoplay playsinline class="video-box"></video></div>');
@@ -124,6 +124,7 @@ function updateParticipants(){
     Object.keys(remoteVideos).forEach(id=>list.append(`<li class="collection-item">${id}</li>`));
 }
 
+// Initialize
 initMedia().then(()=> socket.emit('joinMeeting',{meetingID,userID}));
 
 // Chat
@@ -140,10 +141,25 @@ socket.on('receiveMessage',({userID:from,msg})=>{
     $("#messages").scrollTop($("#messages")[0].scrollHeight);
 });
 
-// Mediasoup client
+// Mediasoup Client
 let device, sendTransport, recvTransport;
+let consumers = [];
+
+async function createRecvTransport(peerID){
+    return new Promise(resolve=>{
+        socket.emit('createTransport', null, async transportData=>{
+            const transport = device.createRecvTransport(transportData);
+            transport.on('connect', ({ dtlsParameters }, callback, errback)=>{
+                socket.emit('connectTransport',{transportId: transport.id, dtlsParameters});
+                callback();
+            });
+            resolve(transport);
+        });
+    });
+}
+
 socket.on('connect', async ()=>{
-    const r = await socket.emit('createTransport', null, transportData => {
+    const r = await socket.emit('createTransport', null, async transportData=>{
         device = new mediasoup.Device();
         await device.load({ routerRtpCapabilities: transportData.rtpCapabilities || device.rtpCapabilities });
         sendTransport = device.createSendTransport(transportData);
@@ -154,8 +170,29 @@ socket.on('connect', async ()=>{
         sendTransport.on('produce', async ({ kind, rtpParameters }, callback, errback)=>{
             socket.emit('produce',{kind,rtpParameters}, ({id})=>callback({id}));
         });
+
         localStream.getTracks().forEach(track=> sendTransport.produce({track}));
     });
+});
+
+// Listen for new producers
+socket.on('newProducer', async ({ producerId, producerSocketId, kind })=>{
+    if(peers[producerSocketId]) return;
+    const transport = await createRecvTransport(producerSocketId);
+    const { rtpParameters } = await new Promise(resolve=>{
+        socket.emit('consume',{producerId}, data=>resolve(data));
+    });
+    const consumer = await transport.consume({ producerId, rtpParameters, kind });
+    const stream = new MediaStream();
+    stream.addTrack(consumer.track);
+    addRemoteVideo(producerSocketId, stream);
+    peers[producerSocketId] = { consumer, transport };
+    consumers.push(consumer);
+});
+
+// Handle leaving
+socket.on('participantLeft', ({ userID: leftID })=>{
+    removeRemoteVideo(leftID);
 });
 
 // Recording
@@ -180,7 +217,6 @@ $("#download-video").on('click',()=>{
     const a = document.createElement('a');
     a.href = url; a.download='recording.webm'; a.click();
     $("#start-recording").prop("disabled",false);
-});
 });
 </script>
 </body>
