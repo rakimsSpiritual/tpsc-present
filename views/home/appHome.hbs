@@ -1,6 +1,5 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -8,7 +7,6 @@
 
 <link rel="stylesheet" href="/css/bootstrap.min.css">
 <link rel="stylesheet" href="/css/style.css">
-<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
 <script src="/socket.io/socket.io.js"></script>
@@ -18,35 +16,19 @@ body { margin:0; font-family:'Segoe UI', sans-serif; background:#f0f0f0; }
 .video-box { width:100%; max-width:250px; height:auto; background:black; margin-bottom:5px; }
 .userbox { margin:5px; display:flex; flex-direction:column; align-items:center; }
 #messages { height:300px; overflow-y:auto; border:1px solid #ccc; padding:5px; background:white; }
-.header-bar { background-color: rgba(0,85,77,0.9); color:white; padding:10px 20px; display:flex; justify-content:space-between; align-items:center; font-size:14px; }
-.header-bar div { margin:0 10px; }
-.info-group { display:flex; gap:15px; }
 @media screen and (max-width:768px) {
     #meetingContainer, .g-right-details-wrap { flex-basis:100% !important; margin-top:10px; }
-    .header-bar { flex-direction:column; text-align:center; }
-    .info-group { flex-direction:column; align-items:center; }
 }
 </style>
 </head>
-
 <body>
-
-<div class="header-bar">
-    <div style="font-weight:bold;">TPSC Video Classroom Session</div>
-    <div class="info-group">
-        <div id="clock"></div>
-        <div id="day"></div>
-        <div id="ip"></div>
-        <div id="location"></div>
-    </div>
-</div>
-
 <main class="container-fluid d-flex flex-column home-wrap">
-
-    <div id="meetingContainer" style="display:flex;flex-basis:75%;flex-wrap:wrap;">
-        <h1 id='meetingname'>Classroom</h1>
-        <div class="call-wrap bg-dark p-2" style="flex:1;">
-            <div id='divUsers' class="video-wrap d-flex flex-wrap">
+    <!-- Video Section -->
+    <div id="meetingContainer" style="display:none;flex-basis:75%;">
+        <h1 id="meetingname">Classroom</h1>
+        <div class="call-wrap bg-dark p-2">
+            <div id="divUsers" class="video-wrap d-flex flex-wrap">
+                <!-- Local Video -->
                 <div id="me" class="userbox">
                     <h5 class="user-name">Me</h5>
                     <video id="localVideoCtr" autoplay muted playsinline class="video-box"></video>
@@ -55,7 +37,8 @@ body { margin:0; font-family:'Segoe UI', sans-serif; background:#f0f0f0; }
         </div>
     </div>
 
-    <div class="g-right-details-wrap bg-light text-dark p-2" style="flex-basis:25%; display:flex; flex-direction:column;">
+    <!-- Sidebar -->
+    <div class="g-right-details-wrap bg-light text-dark p-2" style="flex-basis:25%;display:none;">
         <h5>Participants</h5>
         <ul id="participantsList" class="list-group mb-2"></ul>
 
@@ -65,48 +48,74 @@ body { margin:0; font-family:'Segoe UI', sans-serif; background:#f0f0f0; }
             <input type="text" id="msgbox" class="form-control" placeholder="Type a message">
             <button id="btnSendMsg" class="btn btn-primary">Send</button>
         </div>
+    </div>
 
-        <div class="mt-3">
-            <button id="start-recording" class="btn btn-danger">Start Recording</button>
-            <button id="download-video" class="btn btn-success" disabled>Download Recording</button>
-        </div>
+    <div class="mt-3">
+        <button id="start-recording" class="btn btn-danger">Start Recording</button>
+        <button id="download-video" class="btn btn-success" disabled>Download Recording</button>
     </div>
 </main>
 
 <script src="/js/app.js"></script>
 <script>
-function updateTime() {
-    const now = new Date();
-    document.getElementById('clock').textContent = `Time: ${now.toLocaleTimeString()}`;
-    document.getElementById('day').textContent = `Date: ${now.toLocaleDateString(undefined, { weekday:'long', year:'numeric', month:'long', day:'numeric'})}`;
-}
-setInterval(updateTime,1000); updateTime();
+$(document).ready(function() {
+    const socket = io();
+    const meetingID = new URLSearchParams(window.location.search).get('meetingID');
+    let userID = new URLSearchParams(window.location.search).get('uid');
+    if (!userID) userID = prompt('Enter your nickname');
 
-fetch('https://ipapi.co/json/').then(res=>res.json()).then(data=>{
-    document.getElementById('ip').textContent=`IP: ${data.ip}`;
-    document.getElementById('location').textContent=`Location: ${data.city}, ${data.country_name}`;
-});
+    if (!meetingID || !userID) {
+        alert('Meeting ID or User ID missing!');
+        return;
+    }
 
-// Enter key listener for chat
-$(document).ready(function(){
+    $('#meetingContainer, .g-right-details-wrap').show();
+
+    // --- Enter key sends chat ---
     const sendMessage = () => {
         const msg = $('#msgbox').val().trim();
-        if(msg) {
-            socket.emit('sendMessage',{ meetingID: meetingIDGlobal, userID: userIDGlobal, msg });
+        if (msg) {
+            socket.emit('sendMessage', { meetingID, userID, msg });
             $('#msgbox').val('');
             $('#messages').scrollTop($('#messages')[0].scrollHeight);
         }
     };
 
     $('#btnSendMsg').on('click', sendMessage);
-    $('#msgbox').on('keydown', function(e){
-        if(e.key==='Enter' && !e.shiftKey){
+    $('#msgbox').on('keydown', function(e) {
+        if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
             sendMessage();
         }
     });
+
+    // --- Chat receive ---
+    socket.on('receiveMessage', ({ userID: from, msg }) => {
+        const div = document.createElement('div');
+        div.textContent = `${from}: ${msg}`;
+        $('#messages').append(div);
+        $('#messages').scrollTop($('#messages')[0].scrollHeight);
+    });
+
+    // --- Participants ---
+    const updateParticipants = participants => {
+        const list = $('#participantsList');
+        list.empty();
+        list.append(`<li class="list-group-item">${userID}</li>`);
+        participants.forEach(p => {
+            if (p !== userID) list.append(`<li class="list-group-item">${p}</li>`);
+        });
+    };
+
+    // --- WebRTC via app.js ---
+    MyApp(userID, meetingID);
+
+    // Listen for existing participants and new joins
+    socket.on('existingParticipants', updateParticipants);
+    socket.on('newParticipant', ({ userID: newUser }) => {
+        socket.emit('joinMeeting', { meetingID, userID }); // refresh peers
+    });
 });
 </script>
-
 </body>
 </html>
