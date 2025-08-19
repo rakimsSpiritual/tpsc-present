@@ -8,7 +8,7 @@ const mediasoup = require("mediasoup");
 
 const app = express();
 
-// HTTPS setup
+// HTTPS setup (optional)
 const options = {
   key: fs.existsSync("key.pem") ? fs.readFileSync("key.pem") : null,
   cert: fs.existsSync("cert.pem") ? fs.readFileSync("cert.pem") : null,
@@ -22,36 +22,28 @@ const io = new Server(server, {
   cors: { origin: "*", methods: ["GET", "POST"] }
 });
 
-// Serve static files
+// Static files and HBS setup
 app.use(express.static(path.join(__dirname, "public")));
-
-// HBS setup
 app.set("view engine", "hbs");
 app.set("views", path.join(__dirname, "views"));
 
-// Routes
 app.get("/", (req, res) => res.redirect("/sign"));
 app.get("/sign", (req, res) => res.render("signin"));
 app.get("/appHome", (req, res) => res.render("appHome"));
 
-// Meetings store: { meetingID: { socketID: userID } }
-const meetings = {};
+// Meetings and mediasoup rooms
+const meetings = {}; // { meetingID: { socketID: userID } }
+const rooms = {};    // { meetingID: { router, peers: { socketID: { sendTransport, recvTransport, producers, consumers } } } }
 
-// --- Mediasoup setup ---
 let worker;
-const rooms = {}; // { meetingID: { router, peers: { socketID: { sendTransport, recvTransport, producers } } } }
 
+// Create Mediasoup worker
 async function createWorker() {
-  worker = await mediasoup.createWorker({
-    rtcMinPort: 40000,
-    rtcMaxPort: 49999,
-  });
-
+  worker = await mediasoup.createWorker({ rtcMinPort: 40000, rtcMaxPort: 49999 });
   worker.on("died", () => {
     console.error("Mediasoup worker died, exiting...");
     process.exit(1);
   });
-
   console.log("Mediasoup worker created");
 }
 createWorker();
@@ -59,12 +51,12 @@ createWorker();
 io.on("connection", (socket) => {
   console.log("User connected:", socket.id);
 
+  // User joins meeting
   socket.on("joinMeeting", async ({ meetingID, userID }) => {
     socket.join(meetingID);
     socket.userID = userID;
     socket.meetingID = meetingID;
 
-    // Normal chat participants
     if (!meetings[meetingID]) meetings[meetingID] = {};
     meetings[meetingID][socket.id] = userID;
 
@@ -74,34 +66,25 @@ io.on("connection", (socket) => {
       socketID: socket.id
     });
 
-    // --- Mediasoup room setup ---
     if (!rooms[meetingID]) {
       const router = await worker.createRouter({ mediaCodecs: [
-        {
-          kind: "audio",
-          mimeType: "audio/opus",
-          clockRate: 48000,
-          channels: 2
-        },
-        {
-          kind: "video",
-          mimeType: "video/VP8",
-          clockRate: 90000
-        }
-      ] });
+        { kind: "audio", mimeType: "audio/opus", clockRate: 48000, channels: 2 },
+        { kind: "video", mimeType: "video/VP8", clockRate: 90000 }
+      ]});
       rooms[meetingID] = { router, peers: {} };
     }
 
     rooms[meetingID].peers[socket.id] = {
       sendTransport: null,
       recvTransport: null,
-      producers: []
+      producers: [],
+      consumers: []
     };
 
     socket.emit("mediasoupRouterRtpCapabilities", rooms[meetingID].router.rtpCapabilities);
   });
 
-  // --- Mediasoup signaling ---
+  // Create WebRTC transport
   socket.on("createWebRtcTransport", async (_, callback) => {
     const room = rooms[socket.meetingID];
     if (!room) return;
@@ -124,6 +107,7 @@ io.on("connection", (socket) => {
     });
   });
 
+  // Connect transport
   socket.on("connectTransport", async ({ dtlsParameters }, callback) => {
     const room = rooms[socket.meetingID];
     const transport = room.peers[socket.id].sendTransport;
@@ -131,21 +115,28 @@ io.on("connection", (socket) => {
     callback();
   });
 
+  // Produce track
   socket.on("produce", async ({ kind, rtpParameters }, callback) => {
     const room = rooms[socket.meetingID];
     const transport = room.peers[socket.id].sendTransport;
     const producer = await transport.produce({ kind, rtpParameters });
     room.peers[socket.id].producers.push(producer);
 
-    // Inform all other clients
-    socket.to(socket.meetingID).emit("newProducer", { producerId: producer.id, kind });
+    // Notify all other clients to consume this producer
+    for (const [peerId, peer] of Object.entries(room.peers)) {
+      if (peerId !== socket.id) {
+        io.to(peerId).emit("newProducer", { producerId: producer.id, kind });
+      }
+    }
 
     callback({ id: producer.id });
   });
 
+  // Consume track
   socket.on("consume", async ({ producerId, rtpCapabilities }, callback) => {
     const room = rooms[socket.meetingID];
     const router = room.router;
+
     if (!router.canConsume({ producerId, rtpCapabilities })) return;
 
     const transport = room.peers[socket.id].recvTransport;
@@ -155,6 +146,8 @@ io.on("connection", (socket) => {
       paused: false
     });
 
+    room.peers[socket.id].consumers.push(consumer);
+
     callback({
       producerId,
       id: consumer.id,
@@ -163,11 +156,12 @@ io.on("connection", (socket) => {
     });
   });
 
-  // --- Chat (same as before) ---
+  // Chat
   socket.on("sendMessage", ({ meetingID, userID, msg }) => {
     io.to(meetingID).emit("receiveMessage", { userID, msg });
   });
 
+  // Disconnect
   socket.on("disconnect", () => {
     const { meetingID, userID } = socket;
     if (meetingID && meetings[meetingID]) {
@@ -175,7 +169,6 @@ io.on("connection", (socket) => {
       io.to(meetingID).emit("participantLeft", { userID, socketID: socket.id });
     }
 
-    // Remove mediasoup peer
     if (meetingID && rooms[meetingID]) {
       delete rooms[meetingID].peers[socket.id];
     }
@@ -184,6 +177,5 @@ io.on("connection", (socket) => {
   });
 });
 
-// Start server
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
