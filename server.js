@@ -1,3 +1,4 @@
+// server.js
 const express = require("express");
 const http = require("http");
 const socketIo = require("socket.io");
@@ -63,7 +64,7 @@ io.on("connection", socket => {
         const producer = await transport.produce({ kind, rtpParameters });
         peers[socket.id].producers.push(producer);
 
-        // Notify other peers
+        // Notify all other peers
         socket.broadcast.emit("newProducer", { producerId: producer.id, producerSocketId: socket.id, kind });
         callback({ id: producer.id });
     });
