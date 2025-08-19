@@ -1,109 +1,115 @@
 const express = require("express");
-const http = require("http");
-const { Server } = require("socket.io");
+const fs = require("fs");
+const https = require("https");
 const path = require("path");
+const { Server } = require("socket.io");
 const mediasoup = require("mediasoup");
 
 const app = express();
-const server = http.createServer(app);
-const io = new Server(server, { cors: { origin: "*" } });
 
-// Serve static and HBS
-app.use(express.static(path.join(__dirname, "public")));
-app.set("view engine", "hbs");
-app.set("views", path.join(__dirname, "views"));
+// HTTPS optional
+const options = {
+  key: fs.existsSync("key.pem") ? fs.readFileSync("key.pem") : null,
+  cert: fs.existsSync("cert.pem") ? fs.readFileSync("cert.pem") : null,
+};
+const server = options.key && options.cert
+  ? https.createServer(options, app)
+  : require("http").createServer(app);
+
+const io = new Server(server, { cors: { origin: "*", methods: ["GET","POST"] } });
+
+// Serve static files
+app.use(express.static(path.join(__dirname,"public")));
+
+// HBS setup
+app.set("view engine","hbs");
+app.set("views", path.join(__dirname,"views"));
 
 // Routes
-app.get("/", (req, res) => res.redirect("/sign"));
-app.get("/sign", (req, res) => res.render("signin"));
-app.get("/appHome", (req, res) => res.render("appHome"));
+app.get("/", (req,res)=>res.redirect("/sign"));
+app.get("/sign", (req,res)=>res.render("signin"));
+app.get("/appHome", (req,res)=>res.render("appHome"));
 
 // --- Mediasoup setup ---
 let worker;
 let router;
-const peers = {}; // socketId => { transports, producers, consumers }
+let peers = {}; // {socketId: { transports:[], producers:[] }}
 
 (async () => {
-  worker = await mediasoup.createWorker({ logLevel: "warn" });
-  router = await worker.createRouter({ mediaCodecs: [
-    { kind: "audio", mimeType: "audio/opus", clockRate: 48000, channels: 2 },
-    { kind: "video", mimeType: "video/VP8", clockRate: 90000 }
+  worker = await mediasoup.createWorker({ logLevel:"warn" });
+  router = await worker.createRouter({ mediaCodecs:[
+    { kind:"audio", mimeType:"audio/opus", clockRate:48000, channels:2 },
+    { kind:"video", mimeType:"video/VP8", clockRate:90000 }
   ]});
 })();
 
-// --- Socket.io ---
+// Socket.IO signaling
 io.on("connection", socket => {
-  peers[socket.id] = { transports: [], producers: [], consumers: [] };
+  console.log("User connected:", socket.id);
 
-  socket.on("joinMeeting", ({ meetingID, userID }) => {
+  socket.on("joinMeeting", async ({meetingID, userID}) => {
     socket.join(meetingID);
     socket.userID = userID;
     socket.meetingID = meetingID;
-    // Inform about existing participants
-    const participants = Array.from(socket.rooms)
-      .flatMap(r => Array.from(io.sockets.adapter.rooms.get(r) || []))
-      .filter(id => id !== socket.id);
-    socket.emit("existingParticipants", participants);
-    socket.to(meetingID).emit("userJoined", { userID: socket.id });
+    if(!peers[socket.id]) peers[socket.id] = { transports:[], producers:[], userID };
+    
+    const otherPeers = Object.values(peers).filter(p=>p.userID!==userID).map(p=>p.userID);
+    socket.emit("existingParticipants", otherPeers);
+    socket.to(meetingID).emit("userJoined", { userID });
   });
 
-  socket.on("createWebRtcTransport", async (_, callback) => {
+  socket.on("getRouterRtpCapabilities", (_, callback) => {
+    callback(router.rtpCapabilities);
+  });
+
+  socket.on("createTransport", async (_, callback) => {
     const transport = await router.createWebRtcTransport({
-      listenIps: [{ ip: "0.0.0.0", announcedIp: null }],
-      enableUdp: true,
-      enableTcp: true,
-      preferUdp: true
+      listenIps:[{ ip:"0.0.0.0", announcedIp: null }],
+      enableUdp:true, enableTcp:true, preferUdp:true
     });
     peers[socket.id].transports.push(transport);
-    callback({
-      id: transport.id,
-      iceParameters: transport.iceParameters,
-      iceCandidates: transport.iceCandidates,
-      dtlsParameters: transport.dtlsParameters
-    });
+    callback({ id: transport.id, iceParameters: transport.iceParameters, iceCandidates: transport.iceCandidates, dtlsParameters: transport.dtlsParameters });
   });
 
-  socket.on("transport-connect", async ({ dtlsParameters, transportId }) => {
-    const transport = peers[socket.id].transports.find(t => t.id === transportId);
+  socket.on("connectTransport", async ({ transportId, dtlsParameters }) => {
+    const transport = peers[socket.id].transports.find(t=>t.id===transportId);
     await transport.connect({ dtlsParameters });
   });
 
-  socket.on("transport-produce", async ({ kind, rtpParameters, transportId }, callback) => {
-    const transport = peers[socket.id].transports.find(t => t.id === transportId);
+  socket.on("produce", async ({ transportId, kind, rtpParameters }, callback) => {
+    const transport = peers[socket.id].transports.find(t=>t.id===transportId);
     const producer = await transport.produce({ kind, rtpParameters });
     peers[socket.id].producers.push(producer);
 
-    // Notify others
-    socket.broadcast.emit("new-producer", { producerId: producer.id, kind, userId: socket.id });
+    // Inform all others
+    socket.to(socket.meetingID).emit("newProducer", { producerId: producer.id, userID: peers[socket.id].userID, kind });
     callback({ id: producer.id });
   });
 
-  socket.on("consume", async ({ producerId, transportId }, callback) => {
-    const transport = peers[socket.id].transports.find(t => t.id === transportId);
-    const consumer = await transport.consume({
-      producerId,
-      rtpCapabilities: router.rtpCapabilities,
-      paused: false
-    });
-    peers[socket.id].consumers.push(consumer);
-    callback({
-      id: consumer.id,
-      producerId,
-      kind: consumer.kind,
-      rtpParameters: consumer.rtpParameters
-    });
+  socket.on("consume", async ({ producerId, rtpCapabilities }, callback) => {
+    if(!router.canConsume({ producerId, rtpCapabilities })) return;
+    const transport = peers[socket.id].transports[0]; // first transport
+    const consumer = await transport.consume({ producerId, rtpCapabilities, paused:false });
+    callback({ id: consumer.id, producerId, kind: consumer.kind, rtpParameters: consumer.rtpParameters });
   });
 
-  socket.on("sendMessage", ({ meetingID, user, message }) => {
-    io.to(meetingID).emit("newMessage", { user, message });
+  // Chat messages
+  socket.on("sendMessage", ({meetingID, userID, msg}) => {
+    io.to(meetingID).emit("receiveMessage", { userID, msg });
   });
 
-  socket.on("disconnect", () => {
-    peers[socket.id]?.producers.forEach(p => p.close());
-    peers[socket.id]?.consumers.forEach(c => c.close());
-    peers[socket.id]?.transports.forEach(t => t.close());
-    delete peers[socket.id];
+  // Disconnect
+  socket.on("disconnect", ()=> {
+    const p = peers[socket.id];
+    if(p){
+      p.producers.forEach(prod=>prod.close());
+      p.transports.forEach(t=>t.close());
+      delete peers[socket.id];
+      io.to(p.meetingID).emit("participantLeft", { userID: p.userID });
+    }
+    console.log("User disconnected:", socket.id);
   });
 });
 
-server.listen(process.env.PORT || 3000, () => console.log("Server running"));
+const PORT = process.env.PORT || 3000;
+server.listen(PORT, ()=>console.log(`Server running on port ${PORT}`));
