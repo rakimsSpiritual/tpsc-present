@@ -1,117 +1,146 @@
+// server.js
 const express = require("express");
 const fs = require("fs");
 const https = require("https");
-const path = require("path");
 const { Server } = require("socket.io");
+const path = require("path");
 const mediasoup = require("mediasoup");
 
 const app = express();
 
+// HTTPS optional
 const options = {
-    key: fs.existsSync("key.pem") ? fs.readFileSync("key.pem") : null,
-    cert: fs.existsSync("cert.pem") ? fs.readFileSync("cert.pem") : null,
+  key: fs.existsSync("key.pem") ? fs.readFileSync("key.pem") : null,
+  cert: fs.existsSync("cert.pem") ? fs.readFileSync("cert.pem") : null,
 };
-
 const server = options.key && options.cert
-    ? https.createServer(options, app)
-    : require("http").createServer(app);
+  ? https.createServer(options, app)
+  : require("http").createServer(app);
 
 const io = new Server(server, { cors: { origin: "*", methods: ["GET","POST"] } });
 
-// Serve static files
-app.use(express.static(path.join(__dirname,"public")));
+// Static files
+app.use(express.static(path.join(__dirname, "public")));
 
-// HBS
-app.set("view engine","hbs");
-app.set("views", path.join(__dirname,"views"));
+// HBS setup
+app.set("view engine", "hbs");
+app.set("views", path.join(__dirname, "views"));
 
 // Routes
 app.get("/", (req,res)=>res.redirect("/sign"));
 app.get("/sign", (req,res)=>res.render("signin"));
 app.get("/appHome", (req,res)=>res.render("appHome"));
 
-// Store meetings
-const meetings = {};
+// Meetings storage
+const meetings = {}; // { meetingID: { socketID: userID } }
 
-// Mediasoup server
+// Mediasoup
 let worker;
-(async () => {
-    worker = await mediasoup.createWorker();
-    console.log("Mediasoup worker started");
-})();
+(async () => { worker = await mediasoup.createWorker(); })();
+const rooms = {}; // { meetingID: { router, transports, producers } }
 
-// Meeting rooms store
-const rooms = {};
-
+// Socket.IO
 io.on("connection", socket => {
-    console.log("User connected:", socket.id);
+  console.log("User connected:", socket.id);
 
-    socket.on("joinMeeting", async ({ meetingID, userID }) => {
-        socket.userID = userID;
-        socket.meetingID = meetingID;
+  // Join meeting
+  socket.on("joinMeeting", async ({meetingID, userID}) => {
+    socket.join(meetingID);
+    socket.userID = userID;
+    socket.meetingID = meetingID;
 
-        socket.join(meetingID);
-        if(!rooms[meetingID]){
-            rooms[meetingID] = { peers: {}, router: await worker.createRouter({ mediaCodecs: [{
-                kind: "audio",
-                mimeType: "audio/opus",
-                clockRate: 48000,
-                channels: 2
-            },{
-                kind:"video",
-                mimeType:"video/VP8",
-                clockRate:90000
-            }]}) };
-        }
+    if(!meetings[meetingID]) meetings[meetingID]={};
+    meetings[meetingID][socket.id] = userID;
 
-        rooms[meetingID].peers[socket.id] = { socket, transports: [], producers: [] };
+    // Mediasoup router for meeting
+    if(!rooms[meetingID]){
+      const router = await worker.createRouter({ mediaCodecs:[{
+        kind:"audio",
+        mimeType:"audio/opus",
+        clockRate:48000,
+        channels:2
+      },{
+        kind:"video",
+        mimeType:"video/VP8",
+        clockRate:90000,
+        parameters:{}
+      }]});
+      rooms[meetingID] = { router, transports:{}, producers:{} };
+    }
 
-        // Inform everyone
-        io.to(meetingID).emit("newParticipant", { participants: Object.values(rooms[meetingID].peers).map(p=>p.socket.userID), userID });
+    io.to(meetingID).emit("newParticipant",{participants:Object.values(meetings[meetingID]), userID, socketID: socket.id});
+  });
+
+  // Mediasoup: create transport
+  socket.on("createTransport", async (_, callback) => {
+    const room = rooms[socket.meetingID];
+    const transport = await room.router.createWebRtcTransport({
+      listenIps: [{ ip: "0.0.0.0", announcedIp: null }],
+      enableUdp: true,
+      enableTcp: true,
+      preferUdp: true,
     });
-
-    // Mediasoup signaling
-    socket.on("createTransport", async (_, callback) => {
-        const room = rooms[socket.meetingID];
-        const transport = await room.router.createWebRtcTransport({ listenIps: ["127.0.0.1"], enableUdp: true, enableTcp:true, preferUdp:true });
-        room.peers[socket.id].transports.push(transport);
-        callback({ id: transport.id, iceParameters: transport.iceParameters, iceCandidates: transport.iceCandidates, dtlsParameters: transport.dtlsParameters });
+    room.transports[socket.id] = transport;
+    callback({
+      id: transport.id,
+      iceParameters: transport.iceParameters,
+      iceCandidates: transport.iceCandidates,
+      dtlsParameters: transport.dtlsParameters,
+      rtpCapabilities: room.router.rtpCapabilities
     });
+  });
 
-    socket.on("connectTransport", async ({ transportId, dtlsParameters }) => {
-        const room = rooms[socket.meetingID];
-        const transport = room.peers[socket.id].transports.find(t=>t.id===transportId);
-        await transport.connect({ dtlsParameters });
+  // Mediasoup: connect transport
+  socket.on("connectTransport", async ({ transportId, dtlsParameters }) => {
+    const room = rooms[socket.meetingID];
+    const transport = room.transports[socket.id];
+    await transport.connect({ dtlsParameters });
+  });
+
+  // Mediasoup: produce
+  socket.on("produce", async ({ kind, rtpParameters }, callback) => {
+    const room = rooms[socket.meetingID];
+    const transport = room.transports[socket.id];
+    const producer = await transport.produce({ kind, rtpParameters });
+    room.producers[socket.id] = room.producers[socket.id] || [];
+    room.producers[socket.id].push(producer);
+
+    // Notify all other clients to consume
+    socket.to(socket.meetingID).emit("newProducer",{ producerId: producer.id, producerSocketId: socket.id, kind });
+    callback({ id: producer.id });
+  });
+
+  // Mediasoup: consume
+  socket.on("consume", async ({ producerId }, callback) => {
+    const room = rooms[socket.meetingID];
+    const router = room.router;
+    const transport = room.transports[socket.id];
+    const producerOwner = Object.values(room.producers).flat().find(p=>p.id===producerId);
+    if(!producerOwner) return;
+
+    const consumer = await transport.consume({
+      producerId,
+      rtpCapabilities: router.rtpCapabilities,
+      paused:false
     });
+    callback({ id: consumer.id, kind: consumer.kind, rtpParameters: consumer.rtpParameters });
+  });
 
-    socket.on("produce", async ({ kind, rtpParameters }, callback) => {
-        const room = rooms[socket.meetingID];
-        const transport = room.peers[socket.id].transports[0];
-        const producer = await transport.produce({ kind, rtpParameters });
-        room.peers[socket.id].producers.push(producer);
+  // Chat
+  socket.on("sendMessage", ({meetingID, userID, msg}) => {
+    io.to(meetingID).emit("receiveMessage",{ userID, msg });
+  });
 
-        // Inform others
-        socket.broadcast.to(socket.meetingID).emit("newProducer", { producerId: producer.id, producerSocketId: socket.id, kind });
-        callback({ id: producer.id });
-    });
-
-    socket.on("consume", async ({ producerId }, callback) => {
-        const room = rooms[socket.meetingID];
-        const consumerTransport = room.peers[socket.id].transports[0]; // simplified
-        const producer = Object.values(room.peers).map(p=>p.producers).flat().find(p=>p.id===producerId);
-        if(!producer) return;
-        const consumer = await consumerTransport.consume({ producerId: producer.id, rtpCapabilities: room.router.rtpCapabilities, paused: false });
-        callback({ id: consumer.id, producerId: producer.id, kind: consumer.kind, rtpParameters: consumer.rtpParameters });
-    });
-
-    socket.on("disconnect", () => {
-        const room = rooms[socket.meetingID];
-        if(room){
-            delete room.peers[socket.id];
-            io.to(socket.meetingID).emit("participantLeft", { userID: socket.userID });
-        }
-        console.log("User disconnected:", socket.id);
-    });
+  // Disconnect
+  socket.on("disconnect", () => {
+    const { meetingID, userID } = socket;
+    if(meetingID && meetings[meetingID]){
+      delete meetings[meetingID][socket.id];
+      io.to(meetingID).emit("participantLeft",{ userID, socketID: socket.id });
+    }
+    console.log("User disconnected:", socket.id);
+  });
 });
 
-server.listen(3000, ()=>console.log("Server running on port 3000"));
+const PORT = process.env.PORT || 3000;
+server.listen(PORT,()=>console.log(`Server running on port ${PORT}`));
