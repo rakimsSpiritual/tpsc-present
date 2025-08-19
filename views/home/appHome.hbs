@@ -2,84 +2,48 @@
 <html>
 
 <head>
-    <meta name="viewport" content="width=device-width" />
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>TeLis Video Classroom</title>
-    <link href="https://unpkg.com/material-components-web@latest/dist/material-components-web.min.css" rel="stylesheet">
-    <script src="https://unpkg.com/material-components-web@latest/dist/material-components-web.min.js"></script>
-    <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
+
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
     <link rel="stylesheet" href="./../../bootstrap.min.css">
     <link rel="stylesheet" href="./../../style.css">
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/2.0.4/socket.io.js"></script>
-    <script src="./../../jquery-3.4.1.min.js"></script>
-    <style>
-        .video-box {
-            width: 100%;
-            max-width: 300px;
-            height: 180px;
-            background: black;
-        }
-
-        .userbox {
-            position: relative;
-            margin: 5px;
-        }
-
-        .video-wrap {
-            display: flex;
-            flex-wrap: wrap;
-            justify-content: center;
-        }
-
-        @media screen and (max-width: 768px) {
-            .top-remote-video-show-wrap {
-                flex-direction: column;
-            }
-
-            #meetingContainer,
-            .g-right-details-wrap {
-                flex-basis: 100% !important;
-            }
-
-            .video-box {
-                width: 90%;
-                height: auto;
-            }
-        }
-    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+    <script src="/socket.io/socket.io.js"></script>
 </head>
 
 <body>
-    <div id="meetingbox" style="display: none;">
-        <p>It seems you are not trying to join any meeting!
-            You may start a new meeting. Here is generated for you. <a id='meetingid' href="#"></a>
-        </p>
-    </div>
-
     <main class="container-fluid d-flex flex-column home-wrap">
+        <div id="meetingbox" style="display:none;">
+            <p>No meeting joined! <a id='meetingid' href="#"></a></p>
+        </div>
+
         <div class="g-top text-light">
-            <div class="top-remote-video-show-wrap d-flex">
-                <div id="meetingContainer" style="display: none;flex-basis: 75%;">
+            <div class="top-remote-video-show-wrap d-flex flex-wrap">
+                <!-- Video Section -->
+                <div id="meetingContainer" style="display:none;flex-basis:75%;">
                     <h1 id='meetingname'></h1>
-                    <div class="call-wrap " style="background-color: black;">
-                        <div id='divUsers' class="video-wrap">
-                            <div id="me" class="userbox div-center-column">
-                                <h2 class="display-center user-name" style="font-size: 14px;"></h2>
-                                <div class="display-center">
-                                    <video autoplay muted id="localVideoCtr" playsinline class="video-box"></video>
-                                </div>
+                    <div class="call-wrap bg-black p-2">
+                        <div id='divUsers' class="video-wrap d-flex flex-wrap">
+                            <!-- Local video -->
+                            <div id="me" class="userbox d-flex flex-column align-items-center m-1">
+                                <h2 class="user-name text-center" style="font-size:14px;"></h2>
+                                <video id="localVideoCtr" autoplay muted playsinline class="video-box"></video>
                             </div>
-                            <div id="otherTemplate" class="userbox div-center-column" style="display:none">
-                                <h2 class="display-center user-name" style="font-size: 14px;"></h2>
-                                <div class="display-center">
-                                    <video autoplay playsinline class="video-box"></video>
-                                </div>
+                            <!-- Remote template -->
+                            <div id="otherTemplate" class="userbox d-flex flex-column align-items-center m-1" style="display:none">
+                                <h2 class="user-name text-center" style="font-size:14px;"></h2>
+                                <video autoplay playsinline class="video-box"></video>
+                                <audio autoplay controls style="display:none;"></audio>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                <div class="g-right-details-wrap bg-light text-secondary h-100" style="flex-basis: 25%;z-index: 1;display: none;">
+                <!-- Sidebar -->
+                <div class="g-right-details-wrap bg-light text-secondary h-100 p-2" style="flex-basis:25%;display:none;">
                     <h5>Participants</h5>
                     <ul id="participantsList" class="list-group mb-2"></ul>
                     <h5>Chat</h5>
@@ -114,12 +78,13 @@
 
             const socket = io();
             const peers = {};
-            const localVideo = document.getElementById('localVideoCtr');
             const remoteVideos = {};
+            const localVideo = document.getElementById('localVideoCtr');
             let localStream;
             let mediaRecorder;
             let recordedChunks = [];
 
+            // Access mic + cam
             async function initMedia() {
                 try {
                     localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
@@ -129,109 +94,96 @@
                 }
             }
 
-            function addRemoteVideo(id, stream) {
-                if (remoteVideos[id]) return;
+            // Add remote video
+            function addRemoteVideo(peerID, stream) {
+                if (remoteVideos[peerID]) return;
                 let template = document.getElementById('otherTemplate');
                 let clone = template.cloneNode(true);
                 clone.style.display = 'flex';
-                clone.id = 'remote_' + id;
-                clone.querySelector('.user-name').textContent = id;
-                let videoEl = clone.querySelector('video');
-                videoEl.srcObject = stream;
+                clone.id = 'remote_' + peerID;
+                clone.querySelector('.user-name').textContent = peerID;
+                clone.querySelector('video').srcObject = stream;
                 document.getElementById('divUsers').appendChild(clone);
-                remoteVideos[id] = clone;
-                updateParticipantsList();
+                remoteVideos[peerID] = clone;
+                updateParticipants();
             }
 
-            function removeRemoteVideo(id) {
-                if (remoteVideos[id]) {
-                    remoteVideos[id].remove();
-                    delete remoteVideos[id];
-                    updateParticipantsList();
+            function removeRemoteVideo(peerID) {
+                if (remoteVideos[peerID]) {
+                    remoteVideos[peerID].remove();
+                    delete remoteVideos[peerID];
+                    updateParticipants();
                 }
             }
 
-            function updateParticipantsList() {
+            function updateParticipants() {
                 const list = document.getElementById('participantsList');
                 list.innerHTML = '';
-                list.appendChild(createListItem(userID));
-                for (let id in remoteVideos) list.appendChild(createListItem(id));
+                list.appendChild(createLi(userID));
+                Object.keys(remoteVideos).forEach(id => list.appendChild(createLi(id)));
             }
 
-            function createListItem(name) {
+            function createLi(name) {
                 const li = document.createElement('li');
                 li.className = 'list-group-item';
                 li.textContent = name;
                 return li;
             }
 
-            initMedia().then(() => {
-                socket.emit('joinMeeting', { meetingID, userID });
-            });
+            initMedia().then(() => socket.emit('joinMeeting', { meetingID, userID }));
 
+            // Signaling
             socket.on('newParticipant', ({ participants, userID: newUser }) => {
-                for (let id of participants) {
-                    if (id !== userID && !peers[id]) {
-                        createPeerConnection(id, true);
-                    }
-                }
+                participants.forEach(async peerName => {
+                    if (peerName === userID) return;
+                    if (peers[peerName]) return;
+
+                    const pc = new RTCPeerConnection();
+                    peers[peerName] = pc;
+
+                    localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+
+                    pc.ontrack = e => addRemoteVideo(peerName, e.streams[0]);
+
+                    pc.onicecandidate = e => {
+                        if (e.candidate) socket.emit('signal', { targetID: peerName, fromID: userID, signal: { candidate: e.candidate } });
+                    };
+
+                    const offer = await pc.createOffer();
+                    await pc.setLocalDescription(offer);
+                    socket.emit('signal', { targetID: peerName, fromID: userID, signal: { sdp: offer } });
+                });
             });
-
-            function createPeerConnection(peerID, isOffer) {
-                const pc = new RTCPeerConnection();
-                peers[peerID] = pc;
-                localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
-
-                pc.ontrack = (event) => addRemoteVideo(peerID, event.streams[0]);
-
-                pc.onicecandidate = (event) => {
-                    if (event.candidate) {
-                        socket.emit('signal', {
-                            targetID: peerID,
-                            fromID: userID,
-                            signal: { candidate: event.candidate }
-                        });
-                    }
-                };
-
-                if (isOffer) {
-                    pc.createOffer().then(offer => {
-                        pc.setLocalDescription(offer);
-                        socket.emit('signal', {
-                            targetID: peerID,
-                            fromID: userID,
-                            signal: { sdp: offer }
-                        });
-                    });
-                }
-
-                return pc;
-            }
 
             socket.on('signal', async ({ fromID, signal }) => {
-                if (!peers[fromID]) createPeerConnection(fromID, false);
+                if (!peers[fromID]) {
+                    const pc = new RTCPeerConnection();
+                    peers[fromID] = pc;
+
+                    localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+
+                    pc.ontrack = e => addRemoteVideo(fromID, e.streams[0]);
+
+                    pc.onicecandidate = e => {
+                        if (e.candidate) socket.emit('signal', { targetID: fromID, fromID: userID, signal: { candidate: e.candidate } });
+                    };
+                }
+
                 const pc = peers[fromID];
+
                 if (signal.sdp) {
                     await pc.setRemoteDescription(new RTCSessionDescription(signal.sdp));
                     if (signal.sdp.type === 'offer') {
                         const answer = await pc.createAnswer();
                         await pc.setLocalDescription(answer);
-                        socket.emit('signal', {
-                            targetID: fromID,
-                            fromID: userID,
-                            signal: { sdp: answer }
-                        });
+                        socket.emit('signal', { targetID: fromID, fromID: userID, signal: { sdp: answer } });
                     }
                 } else if (signal.candidate) {
                     await pc.addIceCandidate(new RTCIceCandidate(signal.candidate));
                 }
             });
 
-            socket.on('participantLeft', ({ userID: leaving }) => {
-                removeRemoteVideo(leaving);
-                if (peers[leaving]) peers[leaving].close();
-                delete peers[leaving];
-            });
+            socket.on('participantLeft', ({ userID: leftID }) => removeRemoteVideo(leftID));
 
             // Chat
             socket.on('receiveMessage', ({ userID: from, msg }) => {
@@ -249,22 +201,63 @@
             });
 
             // Recording
-            function startRecording() {
+            $("#start-recording").on('click', () => {
                 recordedChunks = [];
                 const combinedStream = new MediaStream();
                 localStream.getTracks().forEach(t => combinedStream.addTrack(t));
-                for (let id in remoteVideos) {
-                    const v = remoteVideos[id].querySelector('video');
+                Object.values(remoteVideos).forEach(vEl => {
+                    const v = vEl.querySelector('video');
                     if (v.srcObject) v.srcObject.getTracks().forEach(t => combinedStream.addTrack(t));
-                }
+                });
                 mediaRecorder = new MediaRecorder(combinedStream);
-                mediaRecorder.ondataavailable = e => {
-                    if (e.data.size > 0) recordedChunks.push(e.data);
-                };
+                mediaRecorder.ondataavailable = e => { if (e.data.size > 0) recordedChunks.push(e.data); };
                 mediaRecorder.start();
                 $("#start-recording").prop("disabled", true);
                 $("#download-video").prop("disabled", false);
+            });
+
+            $("#download-video").on('click', () => {
+                if (mediaRecorder) mediaRecorder.stop();
+                const blob = new Blob(recordedChunks, { type: 'video/webm' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'recording.webm';
+                a.click();
+                $("#start-recording").prop("disabled", false);
+            });
+        });
+    </script>
+
+    <style>
+        .video-box {
+            width: 100%;
+            max-width: 250px;
+            height: auto;
+            background: black;
+        }
+
+        .userbox {
+            margin: 5px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        @media screen and (max-width: 768px) {
+            .top-remote-video-show-wrap {
+                flex-direction: column;
             }
 
-            function stopRecording() {
-                if (media
+            #meetingContainer {
+                flex-basis: 100% !important;
+            }
+
+            .g-right-details-wrap {
+                flex-basis: 100% !important;
+                margin-top: 10px;
+            }
+        }
+    </style>
+</body>
+</html>
