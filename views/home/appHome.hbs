@@ -16,6 +16,8 @@ body { margin:0; font-family: Arial, sans-serif; background:#f4f4f4; }
 #divUsers { display:flex; flex-wrap: wrap; justify-content:flex-start; }
 #participantsList { max-height: 200px; overflow-y: auto; }
 #messages { height:200px; overflow-y:auto; border:1px solid #ccc; padding:5px; background:#fff; }
+.action-buttons { margin-top:10px; display:flex; gap:10px; flex-wrap: wrap; }
+.btn-control { display:flex; align-items:center; justify-content:center; width:50px; height:50px; border-radius:50%; background:#00554d; color:white; cursor:pointer; }
 @media (max-width: 768px) {
   #meetingContainer { flex-direction: column; }
   #divUsers { justify-content:center; }
@@ -25,14 +27,27 @@ body { margin:0; font-family: Arial, sans-serif; background:#f4f4f4; }
 <body>
 <main class="container-fluid">
   <h1 class="text-center my-2">TeLis Video Classroom</h1>
+
   <div class="row">
-    <!-- Video Section -->
+    <!-- Video + Controls -->
     <div class="col-md-8" id="meetingContainer" style="display:none;">
       <div id="divUsers">
         <!-- Local Video -->
         <div id="me" class="userbox">
           <h5 class="user-name">Me</h5>
           <video id="localVideoCtr" autoplay muted playsinline class="video-box"></video>
+        </div>
+      </div>
+
+      <!-- Controls -->
+      <div class="action-buttons">
+        <div id="btnMuteUnmute" class="btn-control" title="Mute/Unmute Mic"><span class="material-icons">mic_off</span></div>
+        <div id="btnStartStopCam" class="btn-control" title="Start/Stop Camera"><span class="material-icons">videocam_off</span></div>
+        <div id="btnEndCall" class="btn-control" title="End Call"><span class="material-icons">call_end</span></div>
+        <div id="btnStartStopScreenshare" class="btn-control" title="Share Screen"><span class="material-icons">present_to_all</span></div>
+        <div>
+          <button id="start-recording" class="btn btn-danger btn-sm">Start Recording</button>
+          <button id="download-video" class="btn btn-success btn-sm" disabled>Download Recording</button>
         </div>
       </div>
     </div>
@@ -49,19 +64,13 @@ body { margin:0; font-family: Arial, sans-serif; background:#f4f4f4; }
       </div>
     </div>
   </div>
-
-  <div class="mt-3">
-    <button id="start-recording" class="btn btn-danger">Start Recording</button>
-    <button id="download-video" class="btn btn-success" disabled>Download Recording</button>
-  </div>
 </main>
 
 <script>
 const socket = io();
-let localStream;
+let localStream, mediaRecorder, recordedBlobs;
 let peers = {}; // { userID: RTCPeerConnection }
-let recordedBlobs;
-let mediaRecorder;
+let isMicOn = true, isCamOn = true;
 
 $(function(){
   const urlParams = new URLSearchParams(window.location.search);
@@ -77,26 +86,25 @@ $(function(){
 
   $("#meetingContainer").show();
 
-  // Get media
+  // Get user media
   navigator.mediaDevices.getUserMedia({video:true,audio:true})
     .then(stream => {
       localStream = stream;
       $("#localVideoCtr")[0].srcObject = stream;
       socket.emit("joinMeeting", { meetingID, userID });
     })
-    .catch(err => alert("Error accessing camera/mic: "+err));
+    .catch(err => alert("Camera/Mic error: "+err));
 
-  // Handle new participant
+  // Participant events
   socket.on("newParticipant", ({ participants, userID: newUserID }) => {
     updateParticipantsList(participants);
-    if(newUserID !== userID) initPeer(newUserID, true);
+    if(newUserID !== userID) initPeer(newUserID,true);
   });
 
-  // Participant left
   socket.on("participantLeft", ({ participants }) => updateParticipantsList(participants));
 
-  // Messaging
-  socket.on("receiveMessage", ({ userID: sender, msg }) => {
+  // Chat
+  socket.on("receiveMessage", ({ userID: sender, msg })=>{
     $("#messages").append(`<div><b>${sender}:</b> ${msg}</div>`);
     $("#messages").scrollTop($("#messages")[0].scrollHeight);
   });
@@ -108,8 +116,38 @@ $(function(){
     $("#msgbox").val("");
   });
 
+  // Toggle Mic
+  $("#btnMuteUnmute").click(()=>{
+    isMicOn = !isMicOn;
+    localStream.getAudioTracks()[0].enabled = isMicOn;
+    $("#btnMuteUnmute span").text(isMicOn ? "mic" : "mic_off");
+  });
+
+  // Toggle Camera
+  $("#btnStartStopCam").click(()=>{
+    isCamOn = !isCamOn;
+    localStream.getVideoTracks()[0].enabled = isCamOn;
+    $("#btnStartStopCam span").text(isCamOn ? "videocam" : "videocam_off");
+  });
+
+  // End Call
+  $("#btnEndCall").click(()=>{ window.location.href="/sign"; });
+
+  // Screen share
+  $("#btnStartStopScreenshare").click(async ()=>{
+    try{
+      const screenStream = await navigator.mediaDevices.getDisplayMedia({video:true});
+      const track = screenStream.getTracks()[0];
+      Object.values(peers).forEach(pc=>{
+        const sender = pc.getSenders().find(s=>s.track.kind==="video");
+        sender.replaceTrack(track);
+      });
+      track.onended = ()=>{ Object.values(peers).forEach(pc=>{ const sender=pc.getSenders().find(s=>s.track.kind==="video"); sender.replaceTrack(localStream.getVideoTracks()[0]); }); };
+    } catch(e){ console.log("Screen share error:", e); }
+  });
+
   // Signaling
-  socket.on("signal", async ({ userID: remoteID, sdp, candidate }) => {
+  socket.on("signal", async ({ userID: remoteID, sdp, candidate })=>{
     if(!peers[remoteID]) initPeer(remoteID,false);
     const pc = peers[remoteID];
     if(sdp){
@@ -123,45 +161,44 @@ $(function(){
     if(candidate) pc.addIceCandidate(new RTCIceCandidate(candidate));
   });
 
-  // Start recording
-  $("#start-recording").click(()=>{ startRecording(); });
-  $("#download-video").click(()=>{ downloadRecording(); });
+  // Start/Stop recording
+  $("#start-recording").click(()=> startRecording());
+  $("#download-video").click(()=> downloadRecording());
 });
 
-// Utility functions
+// Helpers
 function updateParticipantsList(list){
   $("#participantsList").empty();
-  list.forEach(u=>{
-    $("#participantsList").append(`<li class="list-group-item">${u}</li>`);
-  });
+  list.forEach(u=>$("#participantsList").append(`<li class="list-group-item">${u}</li>`));
 }
 
-function initPeer(remoteID, isInitiator){
+function initPeer(remoteID,isInitiator){
   const pc = new RTCPeerConnection({iceServers:[{urls:"stun:stun.l.google.com:19302"}]});
-  localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+  localStream.getTracks().forEach(track=>pc.addTrack(track,localStream));
 
-  pc.onicecandidate = e => { if(e.candidate) socket.emit("signal",{ to:remoteID, candidate:e.candidate }); };
-  pc.ontrack = e => {
-    let vid = $("#"+remoteID);
+  pc.onicecandidate = e=>{ if(e.candidate) socket.emit("signal",{ to:remoteID, candidate:e.candidate }); };
+  pc.ontrack = e=>{
+    let vid = $("#"+remoteID+" video");
     if(!vid.length){
       $("#divUsers").append(`<div id="${remoteID}" class="userbox"><h5 class="user-name">${remoteID}</h5><video autoplay playsinline class="video-box"></video></div>`);
       vid = $("#"+remoteID+" video");
-    }else vid = vid.find("video");
+    }
     vid[0].srcObject = e.streams[0];
   };
 
-  peers[remoteID] = pc;
+  peers[remoteID]=pc;
   if(isInitiator){
-    pc.createOffer().then(offer => pc.setLocalDescription(offer).then(()=>{
+    pc.createOffer().then(offer=>pc.setLocalDescription(offer).then(()=>{
       socket.emit("signal",{ to:remoteID, sdp: pc.localDescription });
     }));
   }
 }
 
+// Recording
 function startRecording(){
-  recordedBlobs = [];
-  mediaRecorder = new MediaRecorder(localStream,{mimeType:'video/webm;codecs=vp9,opus'});
-  mediaRecorder.ondataavailable = e=>{ if(e.data && e.data.size>0) recordedBlobs.push(e.data); };
+  recordedBlobs=[];
+  mediaRecorder=new MediaRecorder(localStream,{mimeType:'video/webm;codecs=vp9,opus'});
+  mediaRecorder.ondataavailable=e=>{ if(e.data && e.data.size>0) recordedBlobs.push(e.data); };
   mediaRecorder.start();
   $("#start-recording").prop("disabled",true);
   $("#download-video").prop("disabled",true);
@@ -171,12 +208,9 @@ function downloadRecording(){
   mediaRecorder.stop();
   const blob = new Blob(recordedBlobs,{type:'video/webm'});
   const url = window.URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.style.display="none";
-  a.href=url;
-  a.download="recording.webm";
-  document.body.appendChild(a);
-  a.click();
+  const a=document.createElement("a");
+  a.style.display="none"; a.href=url; a.download="recording.webm";
+  document.body.appendChild(a); a.click();
   setTimeout(()=>{ document.body.removeChild(a); window.URL.revokeObjectURL(url); },100);
   $("#start-recording").prop("disabled",false);
   $("#download-video").prop("disabled",true);
