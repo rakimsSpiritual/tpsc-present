@@ -1,130 +1,92 @@
-require('dotenv').config();
-const express = require('express');
-const { createServer } = require('http');
-const { Server } = require('socket.io');
-const exphbs = require('express-handlebars');
-const path = require('path');
-const mediasoup = require('mediasoup');
+const express = require("express");
+const http = require("http");
+const { Server } = require("socket.io");
+const path = require("path");
+const mediasoup = require("mediasoup");
 
 const app = express();
-const httpServer = createServer(app);
-const io = new Server(httpServer, {
-  cors: { origin: "*" }
-});
+const server = http.createServer(app);
+const io = new Server(server, { cors: { origin: "*" } });
 
-app.engine('hbs', exphbs.engine({ extname: '.hbs' }));
-app.set('view engine', 'hbs');
-app.set('views', path.join(__dirname, 'views'));
-
-app.use(express.static(path.join(__dirname, 'public')));
+// Serve static and HBS
+app.use(express.static(path.join(__dirname, "public")));
+app.set("view engine", "hbs");
+app.set("views", path.join(__dirname, "views"));
 
 // Routes
-app.get('/', (req, res) => res.render('appHome'));
+app.get("/", (req, res) => res.redirect("/sign"));
+app.get("/sign", (req, res) => res.render("signin"));
+app.get("/appHome", (req, res) => res.render("appHome"));
 
-// Mediasoup setup
+// --- Mediasoup setup ---
 let worker;
 let router;
-let transports = [];
-let producers = [];
-let consumers = [];
+const peers = {}; // socketId => { transports, producers, consumers }
 
 (async () => {
-  worker = await mediasoup.createWorker({
-    rtcMinPort: 40000,
-    rtcMaxPort: 49999
-  });
-  worker.on('died', () => {
-    console.error('Mediasoup worker died, exiting...');
-    process.exit(1);
-  });
-
-  router = await worker.createRouter({
-    mediaCodecs: [
-      {
-        kind: "audio",
-        mimeType: "audio/opus",
-        clockRate: 48000,
-        channels: 2
-      },
-      {
-        kind: "video",
-        mimeType: "video/VP8",
-        clockRate: 90000,
-        parameters: { "x-google-start-bitrate": 1000 }
-      }
-    ]
-  });
+  worker = await mediasoup.createWorker({ logLevel: "warn" });
+  router = await worker.createRouter({ mediaCodecs: [
+    { kind: "audio", mimeType: "audio/opus", clockRate: 48000, channels: 2 },
+    { kind: "video", mimeType: "video/VP8", clockRate: 90000 }
+  ]});
 })();
 
-// Helper to create transport
-async function createTransport(callback) {
-  const transport = await router.createWebRtcTransport({
-    listenIps: [{ ip: "0.0.0.0", announcedIp: process.env.RENDER_EXTERNAL_IP || null }],
-    enableUdp: true,
-    enableTcp: true,
-    preferUdp: true
-  });
-
-  transports.push(transport);
-
-  callback({
-    id: transport.id,
-    iceParameters: transport.iceParameters,
-    iceCandidates: transport.iceCandidates,
-    dtlsParameters: transport.dtlsParameters
-  });
-
-  return transport;
-}
-
-// Socket.io logic
+// --- Socket.io ---
 io.on("connection", socket => {
-  console.log("Client connected:", socket.id);
+  peers[socket.id] = { transports: [], producers: [], consumers: [] };
 
-  socket.on("getRouterRtpCapabilities", (cb) => {
-    cb(router.rtpCapabilities);
+  socket.on("joinMeeting", ({ meetingID, userID }) => {
+    socket.join(meetingID);
+    socket.userID = userID;
+    socket.meetingID = meetingID;
+    // Inform about existing participants
+    const participants = Array.from(socket.rooms)
+      .flatMap(r => Array.from(io.sockets.adapter.rooms.get(r) || []))
+      .filter(id => id !== socket.id);
+    socket.emit("existingParticipants", participants);
+    socket.to(meetingID).emit("userJoined", { userID: socket.id });
   });
 
-  socket.on("createTransport", async (data, cb) => {
-    const transport = await createTransport(cb);
-    transport.appData = { socketId: socket.id, producing: data.producing };
-    socket.data.transports = socket.data.transports || [];
-    socket.data.transports.push(transport);
+  socket.on("createWebRtcTransport", async (_, callback) => {
+    const transport = await router.createWebRtcTransport({
+      listenIps: [{ ip: "0.0.0.0", announcedIp: null }],
+      enableUdp: true,
+      enableTcp: true,
+      preferUdp: true
+    });
+    peers[socket.id].transports.push(transport);
+    callback({
+      id: transport.id,
+      iceParameters: transport.iceParameters,
+      iceCandidates: transport.iceCandidates,
+      dtlsParameters: transport.dtlsParameters
+    });
   });
 
-  socket.on("connectTransport", async ({ transportId, dtlsParameters }) => {
-    const transport = transports.find(t => t.id === transportId);
-    if (!transport) return;
+  socket.on("transport-connect", async ({ dtlsParameters, transportId }) => {
+    const transport = peers[socket.id].transports.find(t => t.id === transportId);
     await transport.connect({ dtlsParameters });
   });
 
-  socket.on("produce", async ({ transportId, kind, rtpParameters }, cb) => {
-    const transport = transports.find(t => t.id === transportId);
-    if (!transport) return;
+  socket.on("transport-produce", async ({ kind, rtpParameters, transportId }, callback) => {
+    const transport = peers[socket.id].transports.find(t => t.id === transportId);
     const producer = await transport.produce({ kind, rtpParameters });
-    producers.push(producer);
+    peers[socket.id].producers.push(producer);
 
     // Notify others
-    socket.broadcast.emit("newProducer", { producerId: producer.id, kind });
-    cb({ id: producer.id });
+    socket.broadcast.emit("new-producer", { producerId: producer.id, kind, userId: socket.id });
+    callback({ id: producer.id });
   });
 
-  socket.on("consume", async ({ producerId, transportId, rtpCapabilities }, cb) => {
-    const transport = transports.find(t => t.id === transportId);
-    if (!transport) return;
-
-    if (!router.canConsume({ producerId, rtpCapabilities })) {
-      return cb({ error: "Cannot consume" });
-    }
-
+  socket.on("consume", async ({ producerId, transportId }, callback) => {
+    const transport = peers[socket.id].transports.find(t => t.id === transportId);
     const consumer = await transport.consume({
       producerId,
-      rtpCapabilities,
+      rtpCapabilities: router.rtpCapabilities,
       paused: false
     });
-    consumers.push(consumer);
-
-    cb({
+    peers[socket.id].consumers.push(consumer);
+    callback({
       id: consumer.id,
       producerId,
       kind: consumer.kind,
@@ -132,13 +94,16 @@ io.on("connection", socket => {
     });
   });
 
+  socket.on("sendMessage", ({ meetingID, user, message }) => {
+    io.to(meetingID).emit("newMessage", { user, message });
+  });
+
   socket.on("disconnect", () => {
-    console.log("Client disconnected:", socket.id);
-    if (socket.data.transports) {
-      socket.data.transports.forEach(t => t.close());
-    }
+    peers[socket.id]?.producers.forEach(p => p.close());
+    peers[socket.id]?.consumers.forEach(c => c.close());
+    peers[socket.id]?.transports.forEach(t => t.close());
+    delete peers[socket.id];
   });
 });
 
-const PORT = process.env.PORT || 10000;
-httpServer.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
+server.listen(process.env.PORT || 3000, () => console.log("Server running"));
