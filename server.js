@@ -4,11 +4,11 @@ const fs = require("fs");
 const https = require("https");
 const { Server } = require("socket.io");
 const path = require("path");
+const mediasoup = require("mediasoup");
 
 const app = express();
 
-// --- HTTPS setup (Render auto SSL works with your domain) ---
-// If you have SSL cert files locally (optional for local testing)
+// HTTPS setup
 const options = {
   key: fs.existsSync("key.pem") ? fs.readFileSync("key.pem") : null,
   cert: fs.existsSync("cert.pem") ? fs.readFileSync("cert.pem") : null,
@@ -37,43 +37,149 @@ app.get("/appHome", (req, res) => res.render("appHome"));
 // Meetings store: { meetingID: { socketID: userID } }
 const meetings = {};
 
+// --- Mediasoup setup ---
+let worker;
+const rooms = {}; // { meetingID: { router, peers: { socketID: { sendTransport, recvTransport, producers } } } }
+
+async function createWorker() {
+  worker = await mediasoup.createWorker({
+    rtcMinPort: 40000,
+    rtcMaxPort: 49999,
+  });
+
+  worker.on("died", () => {
+    console.error("Mediasoup worker died, exiting...");
+    process.exit(1);
+  });
+
+  console.log("Mediasoup worker created");
+}
+createWorker();
+
 io.on("connection", (socket) => {
   console.log("User connected:", socket.id);
 
-  // User joins meeting
-  socket.on("joinMeeting", ({ meetingID, userID }) => {
+  socket.on("joinMeeting", async ({ meetingID, userID }) => {
     socket.join(meetingID);
     socket.userID = userID;
     socket.meetingID = meetingID;
 
+    // Normal chat participants
     if (!meetings[meetingID]) meetings[meetingID] = {};
     meetings[meetingID][socket.id] = userID;
 
-    // Send updated participant list to all in meeting
     io.to(meetingID).emit("newParticipant", {
       participants: Object.values(meetings[meetingID]),
       userID,
       socketID: socket.id
     });
+
+    // --- Mediasoup room setup ---
+    if (!rooms[meetingID]) {
+      const router = await worker.createRouter({ mediaCodecs: [
+        {
+          kind: "audio",
+          mimeType: "audio/opus",
+          clockRate: 48000,
+          channels: 2
+        },
+        {
+          kind: "video",
+          mimeType: "video/VP8",
+          clockRate: 90000
+        }
+      ] });
+      rooms[meetingID] = { router, peers: {} };
+    }
+
+    rooms[meetingID].peers[socket.id] = {
+      sendTransport: null,
+      recvTransport: null,
+      producers: []
+    };
+
+    socket.emit("mediasoupRouterRtpCapabilities", rooms[meetingID].router.rtpCapabilities);
   });
 
-  // Forward WebRTC signaling
-  socket.on("signal", ({ targetID, fromID, signal }) => {
-    io.to(targetID).emit("signal", { fromID, signal });
+  // --- Mediasoup signaling ---
+  socket.on("createWebRtcTransport", async (_, callback) => {
+    const room = rooms[socket.meetingID];
+    if (!room) return;
+
+    const transport = await room.router.createWebRtcTransport({
+      listenIps: [{ ip: "0.0.0.0", announcedIp: null }],
+      enableUdp: true,
+      enableTcp: true,
+      preferUdp: true,
+    });
+
+    room.peers[socket.id].sendTransport = transport;
+    room.peers[socket.id].recvTransport = transport; // simple setup
+
+    callback({
+      id: transport.id,
+      iceParameters: transport.iceParameters,
+      iceCandidates: transport.iceCandidates,
+      dtlsParameters: transport.dtlsParameters
+    });
   });
 
-  // Chat messages
+  socket.on("connectTransport", async ({ dtlsParameters }, callback) => {
+    const room = rooms[socket.meetingID];
+    const transport = room.peers[socket.id].sendTransport;
+    await transport.connect({ dtlsParameters });
+    callback();
+  });
+
+  socket.on("produce", async ({ kind, rtpParameters }, callback) => {
+    const room = rooms[socket.meetingID];
+    const transport = room.peers[socket.id].sendTransport;
+    const producer = await transport.produce({ kind, rtpParameters });
+    room.peers[socket.id].producers.push(producer);
+
+    // Inform all other clients
+    socket.to(socket.meetingID).emit("newProducer", { producerId: producer.id, kind });
+
+    callback({ id: producer.id });
+  });
+
+  socket.on("consume", async ({ producerId, rtpCapabilities }, callback) => {
+    const room = rooms[socket.meetingID];
+    const router = room.router;
+    if (!router.canConsume({ producerId, rtpCapabilities })) return;
+
+    const transport = room.peers[socket.id].recvTransport;
+    const consumer = await transport.consume({
+      producerId,
+      rtpCapabilities,
+      paused: false
+    });
+
+    callback({
+      producerId,
+      id: consumer.id,
+      kind: consumer.kind,
+      rtpParameters: consumer.rtpParameters
+    });
+  });
+
+  // --- Chat (same as before) ---
   socket.on("sendMessage", ({ meetingID, userID, msg }) => {
     io.to(meetingID).emit("receiveMessage", { userID, msg });
   });
 
-  // Disconnect
   socket.on("disconnect", () => {
     const { meetingID, userID } = socket;
     if (meetingID && meetings[meetingID]) {
       delete meetings[meetingID][socket.id];
       io.to(meetingID).emit("participantLeft", { userID, socketID: socket.id });
     }
+
+    // Remove mediasoup peer
+    if (meetingID && rooms[meetingID]) {
+      delete rooms[meetingID].peers[socket.id];
+    }
+
     console.log("User disconnected:", socket.id);
   });
 });
