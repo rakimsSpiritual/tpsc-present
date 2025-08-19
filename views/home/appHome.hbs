@@ -1,272 +1,79 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-  <meta charset="utf-8" />
-  <title>TeLis Classroom</title>
-  <link rel="stylesheet" href="/bootstrap.min.css" />
-  <style>
-    body { font-family: Arial, sans-serif; background:#111; color:#eee; margin:0; }
-    .container { padding:16px; display:flex; gap:12px; }
-    .left { flex:3; }
-    .right { flex:1; background:#0007; padding:12px; border-radius:8px; max-height:80vh; overflow:auto; }
-    .video-wrap { display:flex; flex-wrap:wrap; gap:10px; }
-    .userbox { width:220px; background:#000; padding:6px; border-radius:6px; display:flex; flex-direction:column; align-items:center; }
-    .video-box { width:100%; height:auto; background:#000; border-radius:4px; }
-    #messages { height:300px; overflow:auto; background:#0005; padding:6px; border-radius:6px; margin-bottom:8px; color:white; }
-    .list-group-item { background:transparent; color:white; border:none; padding:6px 0; }
-    input.form-control { width:100%; padding:8px; border-radius:4px; border:1px solid #ccc; margin-bottom:8px; }
-    .btn { padding:8px 10px; border-radius:4px; border:none; cursor:pointer; }
-    .btn-primary { background:#007bff; color:white; }
-    .btn-danger { background:#dc3545; color:white; }
-  </style>
-
-  <script src="/socket.io/socket.io.js"></script>
-  <script src="https://unpkg.com/mediasoup-client@3/lib/index.js"></script>
+<meta charset="UTF-8">
+<title>TPSC Classroom</title>
+<script src="/socket.io/socket.io.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+<style>
+  video { width: 200px; margin:5px; background:black; }
+  #videos { display:flex; flex-wrap:wrap; }
+</style>
 </head>
 <body>
-  <div style="padding:10px;">
-    <div style="display:flex; justify-content:space-between; align-items:center;">
-      <h3>TeLis Video Classroom</h3>
-      <div><span id="clock"></span></div>
-    </div>
-  </div>
-
-  <div class="container">
-    <div class="left">
-      <h4 id="meetingname"></h4>
-      <div class="video-wrap" id="divUsers">
-        <div id="me" class="userbox">
-          <strong class="user-name">You</strong>
-          <video id="localVideoCtr" autoplay muted playsinline class="video-box"></video>
-        </div>
-
-        <!-- remote template -->
-        <div id="remoteTemplate" class="userbox" style="display:none;">
-          <strong class="user-name">Remote</strong>
-          <video autoplay playsinline class="video-box"></video>
-        </div>
-      </div>
-    </div>
-
-    <div class="right">
-      <h5>Participants</h5>
-      <ul id="participantsList" class="list-group"></ul>
-
-      <h5>Chat</h5>
-      <div id="messages"></div>
-      <input id="msgbox" class="form-control" placeholder="Type a message">
-      <button id="btnSendMsg" class="btn btn-primary">Send</button>
-
-      <div style="margin-top:10px;">
-        <button id="start-recording" class="btn btn-danger">Start Recording</button>
-        <button id="download-video" class="btn" disabled>Download</button>
-      </div>
-    </div>
-  </div>
+<h1>TPSC Video Classroom</h1>
+<div id="videos">
+  <video id="localVideo" autoplay muted playsinline></video>
+</div>
+<input type="text" id="msgbox" placeholder="Type a message"/>
+<button id="btnSendMsg">Send</button>
+<div id="messages" style="height:200px; overflow:auto; border:1px solid #ccc;"></div>
 
 <script>
-(async () => {
-  const socket = io();
-  const url = new URL(window.location.href);
-  const MEETING_ID = url.searchParams.get('meetingID');
-  const UID = url.searchParams.get('uid') || prompt('Enter name');
+const socket = io();
+let localStream, userID, meetingID;
+let transports = [], producers = [], consumers = [];
 
-  if (!MEETING_ID || !UID) { alert('Missing meetingID or uid'); throw new Error('Missing params'); }
+(async function init() {
+  const params = new URLSearchParams(window.location.search);
+  meetingID = params.get("meetingID") || prompt("Enter meeting ID:");
+  userID = params.get("uid") || prompt("Enter your name:");
 
-  const localVideo = document.getElementById('localVideoCtr');
-  const divUsers = document.getElementById('divUsers');
-  const remoteTemplate = document.getElementById('remoteTemplate');
-  const participantsList = document.getElementById('participantsList');
-  const messages = document.getElementById('messages');
-  const msgbox = document.getElementById('msgbox');
-  const sendBtn = document.getElementById('btnSendMsg');
-  const startRecBtn = document.getElementById('start-recording');
-  const downloadBtn = document.getElementById('download-video');
+  const localVid = document.getElementById("localVideo");
+  localStream = await navigator.mediaDevices.getUserMedia({ video:true, audio:true });
+  localVid.srcObject = localStream;
 
-  let device;
-  let sendTransport;
-  let recvTransport;
-  let localStream;
-  const consumers = {};
-  const consumerStreams = {};
-  const producerOwner = {};
+  socket.emit("joinMeeting", { meetingID, userID });
 
-  function updateClock(){ document.getElementById('clock').textContent = new Date().toLocaleString(); }
-  setInterval(updateClock,1000); updateClock();
+  // --- Create transport & produce ---
+  socket.emit("createWebRtcTransport", {}, async transportData => {
+    const pcTransportId = transportData.id;
 
-  function updateParticipants() {
-    participantsList.innerHTML = '';
-    const meLi = document.createElement('li'); meLi.className='list-group-item'; meLi.textContent = UID + ' (You)'; participantsList.appendChild(meLi);
-    const owners = {};
-    for (const pid in producerOwner) owners[producerOwner[pid]] = true;
-    Object.keys(owners).forEach(o => { const li=document.createElement('li'); li.className='list-group-item'; li.textContent=o; participantsList.appendChild(li); });
-  }
+    // Connect
+    await socket.emit("transport-connect", { dtlsParameters: transportData.dtlsParameters, transportId: pcTransportId });
 
-  function addRemoteUI(producerId, ownerLabel) {
-    if (document.getElementById('remote_' + producerId)) return document.getElementById('remote_' + producerId);
-    const clone = remoteTemplate.cloneNode(true);
-    clone.style.display = 'flex';
-    clone.id = 'remote_' + producerId;
-    clone.querySelector('.user-name').textContent = ownerLabel || producerId;
-    divUsers.appendChild(clone);
-    updateParticipants();
-    return clone;
-  }
-
-  function removeRemoteUI(producerId) {
-    const el = document.getElementById('remote_' + producerId);
-    if (el) el.remove();
-    delete consumers[producerId];
-    delete consumerStreams[producerId];
-    delete producerOwner[producerId];
-    updateParticipants();
-  }
-
-  async function getLocalMedia(){
-    localStream = await navigator.mediaDevices.getUserMedia({ video:true, audio:true });
-    localVideo.srcObject = localStream;
-  }
-
-  async function loadDevice(){
-    const rtpCapabilities = await new Promise(resolve => socket.emit('getRouterRtpCapabilities', null, resolve));
-    device = new mediasoupClient.Device();
-    await device.load({ routerRtpCapabilities: rtpCapabilities });
-  }
-
-  async function createSendTransport(){
-    const transportOptions = await new Promise(resolve => socket.emit('createTransport', null, resolve));
-    sendTransport = device.createSendTransport(transportOptions);
-    sendTransport.on('connect', ({ dtlsParameters }, callback) => {
-      socket.emit('connectTransport', { transportId: sendTransport.id, dtlsParameters }, () => callback());
-    });
-    sendTransport.on('produce', async ({ kind, rtpParameters }, callback) => {
-      socket.emit('produce', { transportId: sendTransport.id, kind, rtpParameters }, ({ id }) => callback({ id }));
-    });
-  }
-
-  async function createRecvTransport(){
-    const transportOptions = await new Promise(resolve => socket.emit('createTransport', null, resolve));
-    recvTransport = device.createRecvTransport(transportOptions);
-    recvTransport.on('connect', ({ dtlsParameters }, callback) => {
-      socket.emit('connectTransport', { transportId: recvTransport.id, dtlsParameters }, () => callback());
-    });
-  }
-
-  async function produceLocalTracks(){
-    for (const track of localStream.getTracks()) {
-      await sendTransport.produce({ track });
+    // Produce
+    for(const track of localStream.getTracks()) {
+      await socket.emit("transport-produce", { kind: track.kind, rtpParameters: {} /* simplified for example */, transportId: pcTransportId }, () => {});
     }
-  }
 
-  async function consumeProducer(producerId, producerSocketId) {
-    if (consumers[producerId]) return;
-    if (!recvTransport) await createRecvTransport();
+    transports.push({ id: pcTransportId });
+  });
 
-    socket.emit('consume', { transportId: recvTransport.id, producerId, rtpCapabilities: device.rtpCapabilities }, async (consumerParams) => {
-      if (!consumerParams || consumerParams.error) {
-        console.warn('consume error', consumerParams);
-        return;
-      }
-      try {
-        const consumer = await recvTransport.consume({
-          id: consumerParams.id,
-          producerId: consumerParams.producerId,
-          kind: consumerParams.kind,
-          rtpParameters: consumerParams.rtpParameters
-        });
-
-        const ms = new MediaStream();
-        ms.addTrack(consumer.track);
-        consumerStreams[producerId] = ms;
-        producerOwner[producerId] = producerSocketId;
-        const ui = addRemoteUI(producerId, producerSocketId);
-        const vid = ui.querySelector('video');
-        vid.srcObject = ms;
-        consumers[producerId] = consumer;
-
-        if (consumer.paused) {
-          try { await consumer.resume(); } catch (e) { console.warn('resume failed', e); }
-        }
-      } catch (err) {
-        console.error('consume failed', err);
-      }
+  // Listen for new producers
+  socket.on("new-producer", async ({ producerId, kind, userId }) => {
+    // Consume
+    await socket.emit("consume", { producerId, transportId: transports[0].id }, consumerData => {
+      const track = new MediaStream([consumerData.track]);
+      const vid = document.createElement("video");
+      vid.srcObject = track;
+      vid.autoplay = true;
+      vid.playsInline = true;
+      vid.id = `remote-${userId}`;
+      document.getElementById("videos").appendChild(vid);
     });
-  }
-
-  function requestExistingProducers(){
-    socket.emit('getProducers', { meetingID: MEETING_ID }, (list) => {
-      if (!Array.isArray(list)) return;
-      for (const p of list) consumeProducer(p.producerId, p.producerSocketId);
-    });
-  }
-
-  // join flow
-  socket.on('connect', async () => {
-    socket.emit('joinMeeting', { meetingID: MEETING_ID, userID: UID });
-    try {
-      await getLocalMedia();
-      await loadDevice();
-      await createSendTransport();
-      await createRecvTransport();
-      await produceLocalTracks();
-      requestExistingProducers();
-    } catch (err) {
-      console.error('init error', err);
-      alert('Initialization error: ' + (err.message || err));
-    }
   });
-
-  socket.on('newProducer', ({ producerId, producerSocketId, kind }) => {
-    consumeProducer(producerId, producerSocketId);
-  });
-
-  socket.on('existingProducers', (list) => {
-    if (!Array.isArray(list)) return;
-    for (const p of list) consumeProducer(p.producerId, p.producerSocketId);
-  });
-
-  socket.on('producerClosed', ({ producerId }) => removeRemoteUI(producerId));
-
-  socket.on('participantLeft', ({ userID, socketID }) => {
-    for (const pid in producerOwner) {
-      if (producerOwner[pid] === socketID) removeRemoteUI(pid);
-    }
-  });
-
-  // chat
-  sendBtn.addEventListener('click', () => {
-    const text = msgbox.value.trim(); if (!text) return;
-    socket.emit('sendMessage', { meetingID: MEETING_ID, user: UID, message: text });
-    appendMessage('You', text);
-    msgbox.value = '';
-  });
-  msgbox.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendBtn.click(); }});
-  socket.on('receiveMessage', ({ user, message }) => { appendMessage(user, message); });
-  function appendMessage(user, message) { const d = document.createElement('div'); d.textContent = `${user}: ${message}`; messages.appendChild(d); messages.scrollTop = messages.scrollHeight; }
-
-  // recording
-  let mediaRecorder; let recordedChunks = [];
-  startRecBtn.addEventListener('click', () => {
-    if (!localStream) return alert('Local stream not ready.');
-    recordedChunks = [];
-    const combined = new MediaStream();
-    localStream.getTracks().forEach(t => combined.addTrack(t));
-    for (const pid in consumerStreams) consumerStreams[pid].getTracks().forEach(t => combined.addTrack(t));
-    const mime = (MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')) ? 'video/webm;codecs=vp9,opus' : 'video/webm';
-    try { mediaRecorder = new MediaRecorder(combined, { mimeType: mime }); } catch (e) { mediaRecorder = new MediaRecorder(combined); }
-    mediaRecorder.ondataavailable = ev => { if (ev.data && ev.data.size) recordedChunks.push(ev.data); };
-    mediaRecorder.onstop = () => { downloadBtn.disabled = false; };
-    mediaRecorder.start(1000);
-    startRecBtn.textContent = 'Stop Recording';
-    startRecBtn.onclick = () => { mediaRecorder.stop(); startRecBtn.textContent = 'Start Recording'; startRecBtn.onclick = null; startRecBtn.addEventListener('click', ()=>{}); };
-    downloadBtn.disabled = true;
-  });
-  downloadBtn.addEventListener('click', () => {
-    const blob = new Blob(recordedChunks, { type: 'video/webm' });
-    const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `recording_${Date.now()}.webm`; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url),10000);
-  });
-
 })();
+
+// --- Chat ---
+$("#btnSendMsg").on("click", () => {
+  const msg = $("#msgbox").val().trim();
+  if(msg) {
+    socket.emit("sendMessage", { meetingID, user: userID, message: msg });
+    $("#msgbox").val("");
+  }
+});
+$("#msgbox").on("keypress", e => { if(e.key === "Enter") $("#btnSendMsg").click(); });
 </script>
 </body>
 </html>
