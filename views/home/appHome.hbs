@@ -190,6 +190,9 @@
                 const div = document.createElement('div');
                 div.textContent = `${from}: ${msg}`;
                 document.getElementById('messages').appendChild(div);
+                // auto scroll down
+                const messagesBox = document.getElementById('messages');
+                messagesBox.scrollTop = messagesBox.scrollHeight;
             });
 
             $('#btnSendMsg').on('click', () => {
@@ -197,6 +200,14 @@
                 if (text.trim() !== '') {
                     socket.emit('sendMessage', { meetingID, userID, msg: text });
                     $('#msgbox').val('');
+                }
+            });
+
+            // Send on Enter
+            $('#msgbox').on('keypress', function (e) {
+                if (e.which === 13 && !e.shiftKey) {
+                    e.preventDefault();
+                    $('#btnSendMsg').click();
                 }
             });
 
