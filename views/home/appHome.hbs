@@ -7,16 +7,13 @@
 <link rel="stylesheet" href="./../../materialize.min.css">
 <link rel="stylesheet" href="./../../stylee.css">
 <style>
-body { background:#222; color:#eee; font-family:'Segoe UI',sans-serif; }
-.video-box { width:100%; max-width:250px; height:auto; background:black; }
-.userbox { margin:5px; display:flex; flex-direction:column; align-items:center; }
-.top-remote-video-show-wrap { display:flex; flex-wrap:wrap; }
-.g-right-details-wrap { flex-basis:25%; padding:10px; border-left:1px solid #555; max-height:90vh; overflow-y:auto; }
-#messages { height:250px; overflow-y:auto; padding:5px; border:1px solid #ccc; background:#111; color:#fff; }
+body{background:#222;color:#eee;font-family:'Segoe UI',sans-serif;}
+.video-box{width:100%;max-width:250px;height:auto;background:black;}
+.userbox{margin:5px;display:flex;flex-direction:column;align-items:center;}
+.g-right-details-wrap{flex-basis:25%;padding:10px;border-left:1px solid #555;max-height:90vh;overflow-y:auto;}
+#messages{height:250px;overflow-y:auto;padding:5px;border:1px solid #ccc;background:#111;color:#fff;}
 @media screen and (max-width:768px){
-.top-remote-video-show-wrap{ flex-direction:column; }
-#meetingContainer{ flex-basis:100%!important; }
-.g-right-details-wrap{ flex-basis:100%!important; margin-top:10px; }
+.g-right-details-wrap{flex-basis:100%!important;margin-top:10px;}
 }
 </style>
 </head>
@@ -33,36 +30,32 @@ body { background:#222; color:#eee; font-family:'Segoe UI',sans-serif; }
 </div>
 
 <main class="container-fluid d-flex flex-column home-wrap">
-    <div id="meetingContainer" style="display:flex; flex-basis:100%;">
-        <div style="flex-basis:75%;">
-            <h4 id="meetingname"></h4>
-            <div class="call-wrap">
-                <div id="divUsers" class="video-wrap d-flex flex-wrap">
-                    <div id="me" class="userbox">
-                        <h6 class="user-name"></h6>
-                        <video id="localVideoCtr" autoplay muted playsinline class="video-box"></video>
-                    </div>
-                </div>
-            </div>
-        </div>
+<div id="meetingContainer" style="display:flex;flex-basis:100%;">
+<div style="flex-basis:75%;">
+<h4 id="meetingname"></h4>
+<div class="call-wrap">
+<div id="divUsers" class="video-wrap d-flex flex-wrap">
+<div id="me" class="userbox"><h6 class="user-name"></h6><video id="localVideoCtr" autoplay muted playsinline class="video-box"></video></div>
+</div>
+</div>
+</div>
 
-        <div class="g-right-details-wrap">
-            <h6>Participants</h6>
-            <ul id="participantsList" class="collection"></ul>
+<div class="g-right-details-wrap">
+<h6>Participants</h6>
+<ul id="participantsList" class="collection"></ul>
+<h6>Chat</h6>
+<div id="messages"></div>
+<div class="input-field mt-2">
+<input type="text" id="msgbox" placeholder="Type message">
+<button id="btnSendMsg" class="btn teal darken-2" style="margin-top:5px;">Send</button>
+</div>
+</div>
+</div>
 
-            <h6>Chat</h6>
-            <div id="messages"></div>
-            <div class="input-field mt-2">
-                <input type="text" id="msgbox" placeholder="Type message">
-                <button id="btnSendMsg" class="btn teal darken-2" style="margin-top:5px;">Send</button>
-            </div>
-        </div>
-    </div>
-
-    <div class="mt-3">
-        <button id="start-recording" class="btn red">Start Recording</button>
-        <button id="download-video" class="btn green" disabled>Download Recording</button>
-    </div>
+<div class="mt-3">
+<button id="start-recording" class="btn red">Start Recording</button>
+<button id="download-video" class="btn green" disabled>Download Recording</button>
+</div>
 </main>
 
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
@@ -71,152 +64,101 @@ body { background:#222; color:#eee; font-family:'Segoe UI',sans-serif; }
 
 <script>
 $(function(){
-const urlParams = new URLSearchParams(window.location.search);
-const meetingID = urlParams.get('meetingID');
-let userID = urlParams.get('uid') || prompt('Enter your nickname!');
+const urlParams=new URLSearchParams(window.location.search);
+const meetingID=urlParams.get('meetingID');
+let userID=urlParams.get('uid')||prompt('Enter your nickname!');
 if(!meetingID||!userID){ alert('MeetingID or Nickname missing!'); return; }
 
 $("#meetingContainer").show();
-const socket = io();
-const peers = {};
-const remoteVideos = {};
-let localStream, mediaRecorder, recordedChunks = [];
+const socket=io();
+const peers={}, remoteVideos={};
+let localStream, mediaRecorder, recordedChunks=[];
 
 // Clock & Location
 function updateTime(){
-    const now = new Date();
-    $("#clock").text(`Time: ${now.toLocaleTimeString()}`);
-    $("#day").text(`Date: ${now.toLocaleDateString(undefined,{ weekday:'long', year:'numeric', month:'long', day:'numeric'})}`);
+const now=new Date();
+$("#clock").text(`Time: ${now.toLocaleTimeString()}`);
+$("#day").text(`Date: ${now.toLocaleDateString(undefined,{ weekday:'long', year:'numeric', month:'long', day:'numeric'})}`);
 }
 setInterval(updateTime,1000); updateTime();
-
-fetch('https://ipapi.co/json/').then(res=>res.json()).then(data=>{
-    $("#ip").text(`IP: ${data.ip}`);
-    $("#location").text(`Location: ${data.city}, ${data.country_name}`);
-});
+fetch('https://ipapi.co/json/').then(res=>res.json()).then(data=>{$("#ip").text(`IP: ${data.ip}`);$("#location").text(`Location: ${data.city}, ${data.country_name}`);});
 
 // Initialize Media
 async function initMedia(){
-    try {
-        localStream = await navigator.mediaDevices.getUserMedia({video:true,audio:true});
-        $("#localVideoCtr")[0].srcObject = localStream;
-    }catch(err){ alert('Error accessing camera/mic: '+err.message); }
+localStream=await navigator.mediaDevices.getUserMedia({video:true,audio:true});
+$("#localVideoCtr")[0].srcObject=localStream;
 }
 
 // UI Helpers
-function addRemoteVideo(peerID, stream){
-    if(remoteVideos[peerID]) return;
-    const div = $('<div class="userbox"><h6 class="user-name"></h6><video autoplay playsinline class="video-box"></video></div>');
-    div.find('.user-name').text(peerID);
-    div.find('video')[0].srcObject = stream;
-    $("#divUsers").append(div);
-    remoteVideos[peerID] = div;
-    updateParticipants();
+function addRemoteVideo(peerID,stream){
+if(remoteVideos[peerID]) return;
+const div=$('<div class="userbox"><h6 class="user-name"></h6><video autoplay playsinline class="video-box"></video></div>');
+div.find('.user-name').text(peerID);
+div.find('video')[0].srcObject=stream;
+$("#divUsers").append(div);
+remoteVideos[peerID]=div;
+updateParticipants();
 }
-
-function removeRemoteVideo(peerID){
-    if(remoteVideos[peerID]) remoteVideos[peerID].remove(), delete remoteVideos[peerID], updateParticipants();
-}
-
-function updateParticipants(){
-    const list = $("#participantsList"); list.empty();
-    list.append(`<li class="collection-item">${userID}</li>`);
-    Object.keys(remoteVideos).forEach(id=>list.append(`<li class="collection-item">${id}</li>`));
-}
+function removeRemoteVideo(peerID){if(remoteVideos[peerID]) remoteVideos[peerID].remove(), delete remoteVideos[peerID], updateParticipants();}
+function updateParticipants(){const list=$("#participantsList"); list.empty(); list.append(`<li class="collection-item">${userID}</li>`); Object.keys(remoteVideos).forEach(id=>list.append(`<li class="collection-item">${id}</li>`));}
 
 // Initialize
 initMedia().then(()=> socket.emit('joinMeeting',{meetingID,userID}));
 
 // Chat
 function sendMsg(){ 
-    const text = $("#msgbox").val().trim(); 
-    if(!text) return;
-    socket.emit('sendMessage',{meetingID,userID,msg:text});
-    $("#msgbox").val('');
+const text=$("#msgbox").val().trim(); 
+if(!text) return;
+socket.emit('sendMessage',{meetingID,userID,msg:text});
+$("#msgbox").val('');
 }
 $("#btnSendMsg").on('click',sendMsg);
 $("#msgbox").on('keydown',e=>{if(e.key==='Enter') sendMsg();});
-socket.on('receiveMessage',({userID:from,msg})=>{
-    $("#messages").append(`<div>${from}: ${msg}</div>`);
-    $("#messages").scrollTop($("#messages")[0].scrollHeight);
-});
+socket.on('receiveMessage',({userID:from,msg})=>{$("#messages").append(`<div>${from}: ${msg}</div>`); $("#messages").scrollTop($("#messages")[0].scrollHeight);});
 
-// Mediasoup Client
-let device, sendTransport, recvTransport;
-let consumers = [];
-
-async function createRecvTransport(peerID){
-    return new Promise(resolve=>{
-        socket.emit('createTransport', null, async transportData=>{
-            const transport = device.createRecvTransport(transportData);
-            transport.on('connect', ({ dtlsParameters }, callback, errback)=>{
-                socket.emit('connectTransport',{transportId: transport.id, dtlsParameters});
-                callback();
-            });
-            resolve(transport);
-        });
-    });
-}
+// Mediasoup
+let device, sendTransport, recvTransport, consumers=[];
+async function createRecvTransport(){return new Promise(resolve=>{socket.emit('createTransport', null, async transportData=>{const transport=device.createRecvTransport(transportData); transport.on('connect', ({ dtlsParameters }, callback)=>{socket.emit('connectTransport',{transportId: transport.id, dtlsParameters}); callback();}); resolve(transport);});});}
 
 socket.on('connect', async ()=>{
-    const r = await socket.emit('createTransport', null, async transportData=>{
-        device = new mediasoup.Device();
-        await device.load({ routerRtpCapabilities: transportData.rtpCapabilities || device.rtpCapabilities });
-        sendTransport = device.createSendTransport(transportData);
-        sendTransport.on('connect', ({ dtlsParameters }, callback, errback) => {
-            socket.emit('connectTransport',{transportId: sendTransport.id, dtlsParameters});
-            callback();
-        });
-        sendTransport.on('produce', async ({ kind, rtpParameters }, callback, errback)=>{
-            socket.emit('produce',{kind,rtpParameters}, ({id})=>callback({id}));
-        });
+socket.emit('createTransport', null, async transportData=>{
+device=new mediasoup.Device();
+await device.load({routerRtpCapabilities: transportData.rtpCapabilities});
+sendTransport=device.createSendTransport(transportData);
+sendTransport.on('connect', ({ dtlsParameters }, callback)=>{socket.emit('connectTransport',{transportId: sendTransport.id, dtlsParameters}); callback();});
+sendTransport.on('produce', async ({ kind, rtpParameters }, callback)=>{socket.emit('produce',{kind, rtpParameters}, callback);});
 
-        localStream.getTracks().forEach(track=> sendTransport.produce({track}));
-    });
-});
+localStream.getTracks().forEach(track=>sendTransport.produce({ track }));
 
-// Listen for new producers
 socket.on('newProducer', async ({ producerId, producerSocketId, kind })=>{
-    if(peers[producerSocketId]) return;
-    const transport = await createRecvTransport(producerSocketId);
-    const { rtpParameters } = await new Promise(resolve=>{
-        socket.emit('consume',{producerId}, data=>resolve(data));
-    });
-    const consumer = await transport.consume({ producerId, rtpParameters, kind });
-    const stream = new MediaStream();
-    stream.addTrack(consumer.track);
-    addRemoteVideo(producerSocketId, stream);
-    peers[producerSocketId] = { consumer, transport };
-    consumers.push(consumer);
+if(producerSocketId===socket.id) return;
+recvTransport = await createRecvTransport();
+recvTransport.consume({ producerId }, ({ id, kind, rtpParameters })=>{
+const stream=new MediaStream(); stream.addTrack(track); addRemoteVideo(producerSocketId, stream);
 });
-
-// Handle leaving
-socket.on('participantLeft', ({ userID: leftID })=>{
-    removeRemoteVideo(leftID);
+});
 });
 
 // Recording
 $("#start-recording").on('click',()=>{
-    recordedChunks=[];
-    const combinedStream = new MediaStream();
-    localStream.getTracks().forEach(t=>combinedStream.addTrack(t));
-    Object.values(remoteVideos).forEach(vEl=>{
-        const v = vEl.find('video')[0];
-        if(v && v.srcObject) v.srcObject.getTracks().forEach(t=>combinedStream.addTrack(t));
-    });
-    mediaRecorder = new MediaRecorder(combinedStream);
-    mediaRecorder.ondataavailable=e=>{ if(e.data.size>0) recordedChunks.push(e.data); };
-    mediaRecorder.start();
-    $("#start-recording").prop("disabled",true);
-    $("#download-video").prop("disabled",false);
+recordedChunks=[];
+const combinedStream=new MediaStream();
+localStream.getTracks().forEach(t=>combinedStream.addTrack(t));
+Object.values(remoteVideos).forEach(vEl=>{
+const v=vEl.find('video')[0]; if(v.srcObject) v.srcObject.getTracks().forEach(t=>combinedStream.addTrack(t));
+});
+mediaRecorder=new MediaRecorder(combinedStream);
+mediaRecorder.ondataavailable=e=>{ if(e.data.size>0) recordedChunks.push(e.data); };
+mediaRecorder.start();
+$("#start-recording").prop("disabled",true); $("#download-video").prop("disabled",false);
 });
 $("#download-video").on('click',()=>{
-    if(mediaRecorder) mediaRecorder.stop();
-    const blob = new Blob(recordedChunks,{type:'video/webm'});
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download='recording.webm'; a.click();
-    $("#start-recording").prop("disabled",false);
+if(mediaRecorder) mediaRecorder.stop();
+const blob=new Blob(recordedChunks,{type:'video/webm'});
+const url=URL.createObjectURL(blob);
+const a=document.createElement('a'); a.href=url; a.download='recording.webm'; a.click();
+$("#start-recording").prop("disabled",false);
+});
 });
 </script>
 </body>
