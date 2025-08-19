@@ -4,203 +4,192 @@ const socket = io();
 // Global variables
 let localStream;
 let peers = {};
-let userIDGlobal;
-let meetingIDGlobal;
+let userID;
+let meetingID;
 let mediaRecorder;
 let recordedBlobs = [];
 
-// Generate random UUID if not provided
-function generateUUID() {
-    return 'xxxxxx'.replace(/[x]/g, function() {
-        return Math.floor(Math.random() * 10);
+// Initialize after DOM loaded
+document.addEventListener('DOMContentLoaded', async () => {
+  const urlParams = new URLSearchParams(window.location.search);
+  meetingID = urlParams.get('meetingID');
+  userID = urlParams.get('uid') || prompt('Enter your nickname');
+
+  if (!meetingID || !userID) {
+    alert('Meeting ID or nickname missing!');
+    return;
+  }
+
+  // Show meeting container
+  document.getElementById('meetingContainer').style.display = 'flex';
+  document.querySelector('.g-right-details-wrap').style.display = 'block';
+
+  // Get local media
+  try {
+    localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+    document.getElementById('localVideoCtr').srcObject = localStream;
+  } catch (err) {
+    alert('Camera/mic access denied: ' + err.message);
+    return;
+  }
+
+  // Join server
+  socket.emit('joinMeeting', { meetingID, userID });
+
+  // Handle new participants
+  socket.on('newParticipant', participants => {
+    participants.forEach(peerID => {
+      if (peerID !== userID && !peers[peerID]) {
+        createPeerConnection(peerID, true);
+      }
     });
-}
-
-// Initialize App
-function MyApp(userID, meetingID) {
-    userIDGlobal = userID || generateUUID();
-    meetingIDGlobal = meetingID;
-
-    $('#meetingContainer, .g-right-details-wrap').show();
-
-    // Get local media
-    navigator.mediaDevices.getUserMedia({ video: true, audio: true })
-    .then(stream => {
-        localStream = stream;
-        const localVideo = document.getElementById('localVideoCtr');
-        localVideo.srcObject = stream;
-
-        // Notify server
-        socket.emit('joinMeeting', { meetingID: meetingIDGlobal, userID: userIDGlobal });
-
-        // Receive list of existing participants
-        socket.on('existingParticipants', participants => {
-            participants.forEach(pid => {
-                if(pid !== userIDGlobal && !peers[pid]) {
-                    createPeerConnection(pid, true);
-                }
-            });
-        });
-
-        // New participant joined
-        socket.on('newParticipant', ({ userID: newUserID }) => {
-            if(newUserID !== userIDGlobal && !peers[newUserID]) {
-                createPeerConnection(newUserID, true);
-            }
-            updateParticipantsList();
-        });
-
-        // Handle incoming signal
-        socket.on('signal', async ({ fromID, signal }) => {
-            if(!peers[fromID]) {
-                await createPeerConnection(fromID, false);
-            }
-            peers[fromID].pc.signal(signal);
-        });
-
-        // Handle participant leaving
-        socket.on('participantLeft', ({ userID }) => {
-            removeRemoteVideo(userID);
-        });
-
-        // Chat messages
-        socket.on('receiveMessage', ({ userID, msg }) => {
-            const msgDiv = document.createElement('div');
-            msgDiv.textContent = `${userID}: ${msg}`;
-            document.getElementById('messages').appendChild(msgDiv);
-            document.getElementById('messages').scrollTop = document.getElementById('messages').scrollHeight;
-        });
-
-    })
-    .catch(err => {
-        console.error('Error accessing media devices:', err);
-        alert("Cannot access camera/mic. Please allow permissions.");
-    });
-}
-
-// --- WebRTC helpers using SimplePeer ---
-async function createPeerConnection(peerID, initiator) {
-    const pc = new SimplePeer({
-        initiator,
-        trickle: false,
-        stream: localStream
-    });
-
-    pc.on('signal', data => {
-        socket.emit('signal', { targetID: peerID, fromID: userIDGlobal, signal: data });
-    });
-
-    pc.on('stream', stream => {
-        addRemoteVideo(peerID, stream);
-    });
-
-    pc.on('close', () => removeRemoteVideo(peerID));
-
-    peers[peerID] = { pc };
-    return pc;
-}
-
-// Add remote video
-function addRemoteVideo(peerID, stream) {
-    if(document.getElementById('remote_' + peerID)) return;
-
-    const divUsers = document.getElementById('divUsers');
-    const userBox = document.createElement('div');
-    userBox.className = 'userbox';
-    userBox.id = 'remote_' + peerID;
-
-    const h5 = document.createElement('h5');
-    h5.textContent = peerID;
-    h5.className = 'user-name';
-
-    const video = document.createElement('video');
-    video.autoplay = true;
-    video.playsInline = true;
-    video.srcObject = stream;
-
-    userBox.appendChild(h5);
-    userBox.appendChild(video);
-    divUsers.appendChild(userBox);
-
     updateParticipantsList();
-}
+  });
 
-// Remove remote video
-function removeRemoteVideo(peerID) {
-    const el = document.getElementById('remote_' + peerID);
-    if(el) el.remove();
-    delete peers[peerID];
-    updateParticipantsList();
-}
+  // WebRTC signaling
+  socket.on('signal', async ({ from, data }) => {
+    if (!peers[from]) {
+      await createPeerConnection(from, false);
+    }
+    peers[from].peer.signal(data);
+  });
 
-// Update participants list
-function updateParticipantsList() {
-    const list = document.getElementById('participantsList');
-    list.innerHTML = '';
-    list.appendChild(createParticipantLi(userIDGlobal));
-    Object.keys(peers).forEach(pid => list.appendChild(createParticipantLi(pid)));
-}
+  // Participant left
+  socket.on('participantLeft', ({ userID: leftID }) => {
+    removeRemoteVideo(leftID);
+  });
 
-function createParticipantLi(userID) {
-    const li = document.createElement('li');
-    li.className = 'list-group-item';
-    li.textContent = userID;
-    return li;
-}
+  // Chat
+  socket.on('receiveMessage', ({ userID: from, msg }) => {
+    const div = document.createElement('div');
+    div.textContent = `${from}: ${msg}`;
+    const messages = document.getElementById('messages');
+    messages.appendChild(div);
+    messages.scrollTop = messages.scrollHeight;
+  });
 
-// --- Chat ---
-$(document).ready(function(){
-    const sendMessage = () => {
-        const msg = $('#msgbox').val().trim();
-        if(msg) {
-            socket.emit('sendMessage', { meetingID: meetingIDGlobal, userID: userIDGlobal, msg });
-            $('#msgbox').val('');
-            $('#messages').scrollTop($('#messages')[0].scrollHeight);
-        }
-    };
+  // --- Chat: send button + enter key ---
+  const sendMessage = () => {
+    const msgInput = document.getElementById('msgbox');
+    const msg = msgInput.value.trim();
+    if (!msg) return;
+    socket.emit('sendMessage', { meetingID, userID, msg });
+    msgInput.value = '';
+    const messages = document.getElementById('messages');
+    messages.scrollTop = messages.scrollHeight;
+  };
 
-    $('#btnSendMsg').on('click', sendMessage);
+  document.getElementById('btnSendMsg').addEventListener('click', sendMessage);
+  document.getElementById('msgbox').addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      sendMessage();
+    }
+  });
 
-    $('#msgbox').on('keydown', function(e){
-        if(e.key === 'Enter' && !e.shiftKey){
-            e.preventDefault();
-            sendMessage();
-        }
-    });
+  // Recording buttons
+  document.getElementById('start-recording').addEventListener('click', startRecording);
+  document.getElementById('download-video').addEventListener('click', downloadRecording);
 });
 
-// --- Recording ---
-$('#start-recording').on('click', startRecording);
-$('#download-video').on('click', downloadRecording);
+// --- WebRTC functions ---
+async function createPeerConnection(peerID, initiator) {
+  const peer = new SimplePeer({ initiator, trickle: false, stream: localStream });
 
+  peer.on('signal', data => {
+    socket.emit('signal', { from: userID, to: peerID, data });
+  });
+
+  peer.on('stream', remoteStream => {
+    addRemoteVideo(peerID, remoteStream);
+  });
+
+  peer.on('close', () => removeRemoteVideo(peerID));
+
+  peers[peerID] = { peer };
+}
+
+// Add remote video element
+function addRemoteVideo(peerID, stream) {
+  if (document.getElementById('remote_' + peerID)) return;
+
+  const divUsers = document.getElementById('divUsers');
+  const template = document.createElement('div');
+  template.id = 'remote_' + peerID;
+  template.className = 'userbox';
+  template.innerHTML = `<h5 class="user-name">${peerID}</h5><video autoplay playsinline class="video-box"></video>`;
+  template.querySelector('video').srcObject = stream;
+  divUsers.appendChild(template);
+  updateParticipantsList();
+}
+
+// Remove remote video element
+function removeRemoteVideo(peerID) {
+  const el = document.getElementById('remote_' + peerID);
+  if (el) el.remove();
+  delete peers[peerID];
+  updateParticipantsList();
+}
+
+// Update participant list sidebar
+function updateParticipantsList() {
+  const list = document.getElementById('participantsList');
+  list.innerHTML = '';
+  const liSelf = document.createElement('li');
+  liSelf.className = 'list-group-item';
+  liSelf.textContent = userID + ' (You)';
+  list.appendChild(liSelf);
+
+  Object.keys(peers).forEach(pid => {
+    const li = document.createElement('li');
+    li.className = 'list-group-item';
+    li.textContent = pid;
+    list.appendChild(li);
+  });
+}
+
+// --- Recording ---
 function startRecording() {
-    if(!localStream) return alert("No local stream to record");
-    recordedBlobs = [];
-    try {
-        mediaRecorder = new MediaRecorder(localStream, { mimeType: 'video/webm;codecs=vp9,opus' });
-    } catch(e) {
-        mediaRecorder = new MediaRecorder(localStream, { mimeType: 'video/webm' });
-    }
-    mediaRecorder.ondataavailable = e => { if(e.data && e.data.size>0) recordedBlobs.push(e.data); };
-    mediaRecorder.start();
-    $('#start-recording').text('Stop Recording').off('click').on('click', stopRecording);
-    $('#download-video').prop('disabled', true);
+  if (!localStream) return alert('No local stream to record');
+  recordedBlobs = [];
+  const combinedStream = new MediaStream();
+  localStream.getTracks().forEach(t => combinedStream.addTrack(t));
+  Object.values(peers).forEach(p => {
+    const remoteVideo = document.getElementById('remote_' + p.peer._id)?.querySelector('video');
+    if (remoteVideo && remoteVideo.srcObject) remoteVideo.srcObject.getTracks().forEach(t => combinedStream.addTrack(t));
+  });
+
+  try {
+    mediaRecorder = new MediaRecorder(combinedStream, { mimeType: 'video/webm;codecs=vp9,opus' });
+  } catch {
+    mediaRecorder = new MediaRecorder(combinedStream, { mimeType: 'video/webm' });
+  }
+
+  mediaRecorder.ondataavailable = e => { if (e.data.size > 0) recordedBlobs.push(e.data); };
+  mediaRecorder.start();
+  document.getElementById('start-recording').textContent = 'Stop Recording';
+  document.getElementById('start-recording').onclick = stopRecording;
+  document.getElementById('download-video').disabled = true;
 }
 
 function stopRecording() {
-    mediaRecorder.stop();
-    $('#start-recording').text('Start Recording').off('click').on('click', startRecording);
-    $('#download-video').prop('disabled', false);
+  mediaRecorder.stop();
+  document.getElementById('start-recording').textContent = 'Start Recording';
+  document.getElementById('start-recording').onclick = startRecording;
+  document.getElementById('download-video').disabled = false;
 }
 
 function downloadRecording() {
-    const blob = new Blob(recordedBlobs, { type: 'video/webm' });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.style.display='none';
-    a.href = url;
-    a.download = 'recording.webm';
-    document.body.appendChild(a);
-    a.click();
-    setTimeout(()=>{ document.body.removeChild(a); window.URL.revokeObjectURL(url); },100);
+  const blob = new Blob(recordedBlobs, { type: 'video/webm' });
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.style.display = 'none';
+  a.download = 'recording.webm';
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => {
+    document.body.removeChild(a);
+    window.URL.revokeObjectURL(url);
+  }, 100);
 }
