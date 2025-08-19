@@ -2,96 +2,85 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Join Classroom</title>
+<title>Join TeLis Video Classroom</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
 <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
-<link rel="stylesheet" href="./../../materialize.min.css">
-<link rel="stylesheet" href="./../../stylee.css">
+<link rel="stylesheet" href="/css/materialize.min.css">
+<link rel="stylesheet" href="/css/stylee.css">
+
 <style>
-body {
-    margin: 0;
-    font-family: 'Segoe UI', sans-serif;
-    background-image: url('https://upload.wikimedia.org/wikipedia/commons/thumb/3/38/Flag_of_Tanzania.svg/1920px-Flag_of_Tanzania.svg.png');
-    background-size: cover;
-    background-position: center;
-    background-attachment: fixed;
-    color: white;
-}
-.header-bar {
-    background-color: rgba(0,85,77,0.9);
-    padding: 10px 20px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-}
+body { margin:0; font-family:'Segoe UI', sans-serif; background:#f0f0f0; }
+.header-bar { background-color: rgba(0, 85, 77, 0.9); color:white; padding:10px 20px; display:flex; justify-content:space-between; align-items:center; }
 .header-bar div { margin: 0 10px; }
-.main-wrap { margin-top: 20px; display:flex; justify-content:center; align-items:center; height:70vh; }
-.join-meeting, .host-meeting {
-    display:flex;
-    justify-content:center;
-    align-items:center;
-    background-color:#00554d;
-    height:50px;
-    width:200px;
-    font-size:20px;
-    color:white;
-    border-radius:5px;
-    cursor:pointer;
-    margin:10px;
-}
-@media screen and (max-width:600px){
-    .header-bar { flex-direction:column; text-align:center; }
+.main-wrap { margin-top:20px; display:flex; justify-content:center; }
+.join-card { background-color:#00554d; color:white; padding:30px; border-radius:5px; cursor:pointer; font-size:20px; }
+@media screen and (max-width:600px) {
+  .header-bar { flex-direction:column; text-align:center; }
 }
 </style>
 </head>
 <body>
 
 <div class="header-bar">
-    <div style="font-weight:bold;">TPSC Video Classroom Session</div>
-    <div class="info-group">
-        <div id="clock"></div>
-        <div id="day"></div>
-        <div id="ip"></div>
-        <div id="location"></div>
-    </div>
+  <div style="font-weight:bold;">TPSC Video Classroom Session</div>
+  <div>
+    <span id="clock"></span> | <span id="day"></span>
+  </div>
 </div>
 
 <div class="main-wrap">
-    <div class="join-meeting">Join Classroom</div>
-    <div class="host-meeting">Host Classroom</div>
+  <div class="join-card" id="joinBtn">Join Classroom</div>
 </div>
 
 <!-- Scripts -->
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+
 <script>
-function updateTime(){
-    const now=new Date();
-    $("#clock").text(`Time: ${now.toLocaleTimeString()}`);
-    $("#day").text(`Date: ${now.toLocaleDateString(undefined,{ weekday:'long', year:'numeric', month:'long', day:'numeric'})}`);
+function updateTime() {
+  const now = new Date();
+  const clock = now.toLocaleTimeString();
+  const day = now.toLocaleDateString(undefined, { weekday:'long', year:'numeric', month:'long', day:'numeric' });
+  document.getElementById('clock').textContent = `Time: ${clock}`;
+  document.getElementById('day').textContent = `Date: ${day}`;
 }
-setInterval(updateTime,1000); updateTime();
+setInterval(updateTime, 1000);
+updateTime();
 
-fetch('https://ipapi.co/json/').then(res=>res.json()).then(data=>{
-    $("#ip").text(`IP: ${data.ip}`);
-    $("#location").text(`Location: ${data.city}, ${data.country_name}`);
-});
+$(document).ready(function() {
+  $('#joinBtn').on('click', function() {
+    const formHtml = `
+      <div class="row">
+        <form class="col s12">
+          <div class="row">
+            <div class="input-field col s12">
+              <i class="material-icons prefix">call_to_action</i>
+              <input id="meetingID" type="text" required>
+              <label for="meetingID">Meeting ID</label>
+            </div>
+          </div>
+          <div class="row">
+            <div class="input-field col s12">
+              <i class="material-icons prefix">person</i>
+              <input id="nickname" type="text" required>
+              <label for="nickname">Your Nickname</label>
+            </div>
+          </div>
+          <button type="submit" class="btn waves-effect waves-light">Join <i class="material-icons right">send</i></button>
+        </form>
+      </div>`;
+    $('.main-wrap').html(formHtml);
+  });
 
-$(function(){
-    function goToMeeting(meetingID){
-        const uid = prompt('Enter your nickname!');
-        if(!uid) return;
-        const url = `/appHome?meetingID=${meetingID}&uid=${encodeURIComponent(uid)}`;
-        window.location.href = url;
-    }
-
-    $(document).on('click','.join-meeting',function(){
-        const meetingID = prompt('Enter Meeting ID to join:');
-        if(meetingID) goToMeeting(meetingID.trim());
-    });
-
-    $(document).on('click','.host-meeting',function(){
-        const meetingID = Math.floor(Math.random()*100000000);
-        goToMeeting(meetingID);
-    });
+  // Handle form submission
+  $(document).on('submit', 'form', function(e) {
+    e.preventDefault();
+    const meetingID = $('#meetingID').val().trim();
+    const nickname = $('#nickname').val().trim();
+    if (!meetingID || !nickname) return alert('Meeting ID and Nickname are required!');
+    const joinUrl = window.location.origin + '/appHome?meetingID=' + encodeURIComponent(meetingID) + '&uid=' + encodeURIComponent(nickname);
+    window.location.href = joinUrl;
+  });
 });
 </script>
 
