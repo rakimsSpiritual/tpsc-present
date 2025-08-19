@@ -22,7 +22,7 @@ const io = new Server(server, {
   cors: { origin: "*", methods: ["GET", "POST"] }
 });
 
-// Static files and HBS setup
+// Serve static files and HBS setup
 app.use(express.static(path.join(__dirname, "public")));
 app.set("view engine", "hbs");
 app.set("views", path.join(__dirname, "views"));
@@ -31,7 +31,7 @@ app.get("/", (req, res) => res.redirect("/sign"));
 app.get("/sign", (req, res) => res.render("signin"));
 app.get("/appHome", (req, res) => res.render("appHome"));
 
-// Meetings and mediasoup rooms
+// Store meetings and mediasoup rooms
 const meetings = {}; // { meetingID: { socketID: userID } }
 const rooms = {};    // { meetingID: { router, peers: { socketID: { sendTransport, recvTransport, producers, consumers } } } }
 
@@ -51,7 +51,7 @@ createWorker();
 io.on("connection", (socket) => {
   console.log("User connected:", socket.id);
 
-  // User joins meeting
+  // --- User joins meeting ---
   socket.on("joinMeeting", async ({ meetingID, userID }) => {
     socket.join(meetingID);
     socket.userID = userID;
@@ -66,6 +66,7 @@ io.on("connection", (socket) => {
       socketID: socket.id
     });
 
+    // Create Mediasoup room if not exists
     if (!rooms[meetingID]) {
       const router = await worker.createRouter({ mediaCodecs: [
         { kind: "audio", mimeType: "audio/opus", clockRate: 48000, channels: 2 },
@@ -84,7 +85,7 @@ io.on("connection", (socket) => {
     socket.emit("mediasoupRouterRtpCapabilities", rooms[meetingID].router.rtpCapabilities);
   });
 
-  // Create WebRTC transport
+  // --- Create WebRTC transport ---
   socket.on("createWebRtcTransport", async (_, callback) => {
     const room = rooms[socket.meetingID];
     if (!room) return;
@@ -107,7 +108,7 @@ io.on("connection", (socket) => {
     });
   });
 
-  // Connect transport
+  // --- Connect transport ---
   socket.on("connectTransport", async ({ dtlsParameters }, callback) => {
     const room = rooms[socket.meetingID];
     const transport = room.peers[socket.id].sendTransport;
@@ -115,7 +116,7 @@ io.on("connection", (socket) => {
     callback();
   });
 
-  // Produce track
+  // --- Produce track ---
   socket.on("produce", async ({ kind, rtpParameters }, callback) => {
     const room = rooms[socket.meetingID];
     const transport = room.peers[socket.id].sendTransport;
@@ -132,7 +133,7 @@ io.on("connection", (socket) => {
     callback({ id: producer.id });
   });
 
-  // Consume track
+  // --- Consume track ---
   socket.on("consume", async ({ producerId, rtpCapabilities }, callback) => {
     const room = rooms[socket.meetingID];
     const router = room.router;
@@ -156,12 +157,12 @@ io.on("connection", (socket) => {
     });
   });
 
-  // Chat
+  // --- Chat ---
   socket.on("sendMessage", ({ meetingID, userID, msg }) => {
     io.to(meetingID).emit("receiveMessage", { userID, msg });
   });
 
-  // Disconnect
+  // --- Disconnect ---
   socket.on("disconnect", () => {
     const { meetingID, userID } = socket;
     if (meetingID && meetings[meetingID]) {
