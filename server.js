@@ -1,87 +1,83 @@
 // server.js
 const express = require("express");
-const http = require("http");
+const fs = require("fs");
+const https = require("https");
 const { Server } = require("socket.io");
 const path = require("path");
 
 const app = express();
-const server = http.createServer(app);
-const io = new Server(server);
 
-// Serve static files (CSS, JS)
+// --- HTTPS setup (Render auto SSL works with your domain) ---
+// If you have SSL cert files locally (optional for local testing)
+const options = {
+  key: fs.existsSync("key.pem") ? fs.readFileSync("key.pem") : null,
+  cert: fs.existsSync("cert.pem") ? fs.readFileSync("cert.pem") : null,
+};
+
+const server = options.key && options.cert
+  ? https.createServer(options, app)
+  : require("http").createServer(app);
+
+const io = new Server(server, {
+  cors: { origin: "*", methods: ["GET", "POST"] }
+});
+
+// Serve static files
 app.use(express.static(path.join(__dirname, "public")));
 
 // HBS setup
 app.set("view engine", "hbs");
 app.set("views", path.join(__dirname, "views"));
 
-// Render the main classroom page
-app.get("/", (req, res) => {
-  res.redirect("/sign"); // Redirect to signin page if no meetingID
-});
+// Routes
+app.get("/", (req, res) => res.redirect("/sign"));
+app.get("/sign", (req, res) => res.render("signin"));
+app.get("/appHome", (req, res) => res.render("appHome"));
 
-app.get("/appHome", (req, res) => {
-  res.render("appHome");
-});
-
-app.get("/sign", (req, res) => {
-  res.render("signin");
-});
-
-// Store participants per meeting
-const meetings = {}; // { meetingID: [userID1, userID2, ...] }
+// Meetings store: { meetingID: { socketID: userID } }
+const meetings = {};
 
 io.on("connection", (socket) => {
-  console.log("A user connected:", socket.id);
+  console.log("User connected:", socket.id);
 
+  // User joins meeting
   socket.on("joinMeeting", ({ meetingID, userID }) => {
     socket.join(meetingID);
-
-    // Initialize meeting participants
-    if (!meetings[meetingID]) meetings[meetingID] = [];
-    meetings[meetingID].push(userID);
-
-    // Attach userID to socket for easy removal on disconnect
     socket.userID = userID;
     socket.meetingID = meetingID;
 
-    // Notify everyone in the meeting
+    if (!meetings[meetingID]) meetings[meetingID] = {};
+    meetings[meetingID][socket.id] = userID;
+
+    // Send updated participant list to all in meeting
     io.to(meetingID).emit("newParticipant", {
-      participants: meetings[meetingID],
+      participants: Object.values(meetings[meetingID]),
       userID,
+      socketID: socket.id
     });
   });
 
-  socket.on("signal", (data) => {
-    // Forward signaling data to the specific user
-    io.to(data.to).emit("signal", {
-      userID: socket.userID,
-      sdp: data.sdp,
-      candidate: data.candidate,
-    });
+  // Forward WebRTC signaling
+  socket.on("signal", ({ targetID, fromID, signal }) => {
+    io.to(targetID).emit("signal", { fromID, signal });
   });
 
+  // Chat messages
   socket.on("sendMessage", ({ meetingID, userID, msg }) => {
     io.to(meetingID).emit("receiveMessage", { userID, msg });
   });
 
+  // Disconnect
   socket.on("disconnect", () => {
     const { meetingID, userID } = socket;
-    if (meetingID && userID && meetings[meetingID]) {
-      // Remove user from participants
-      meetings[meetingID] = meetings[meetingID].filter((u) => u !== userID);
-
-      // Notify remaining participants
-      io.to(meetingID).emit("participantLeft", {
-        participants: meetings[meetingID],
-        userID,
-      });
+    if (meetingID && meetings[meetingID]) {
+      delete meetings[meetingID][socket.id];
+      io.to(meetingID).emit("participantLeft", { userID, socketID: socket.id });
     }
-    console.log("A user disconnected:", socket.id);
+    console.log("User disconnected:", socket.id);
   });
 });
 
+// Start server
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
+server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
