@@ -410,7 +410,7 @@ var WrtcHelper = (function () {
 
 var MyApp = (function () {
   var socket = null;
-  var socket_url = "http://localhost:3000";
+  var socket_url = "https://tpsc-final.onrender.com";
   var meeting_id = "";
   var user_id = "";
   
