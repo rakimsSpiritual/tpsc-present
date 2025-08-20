@@ -1,136 +1,257 @@
 <!DOCTYPE html>
 <html>
-
 <head>
     <meta name="viewport" content="width=device-width" />
     <title>TeLis Video Classroom</title>
     <link href="https://unpkg.com/material-components-web@latest/dist/material-components-web.min.css" rel="stylesheet">
     <script src="https://unpkg.com/material-components-web@latest/dist/material-components-web.min.js"></script>
     <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
-    <link rel="stylesheet" href="./../../bootstrap.min.css">
-    <link rel="stylesheet" href="./../../style.css">
-
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/2.0.4/socket.io.js"></script>
-    <script src="./../../jquery-3.4.1.min.js"></script>
-    <!-- <script src="scripts/jquery.signalR-2.2.2.min.js"></script> -->
-    <!-- <script src="https://localhost:44338/signalr/hubs"></script> -->
-    <!--    <script src="wrtchelper.js"></script>-->
-    <script src="./../../app.js"></script>
-
-    <script>
-        $(function() {
-            const urlParams = new URLSearchParams(window.location.search);
-            var meeting_id = urlParams.get('meetingID');
-
-            var user_id = urlParams.get('uid');
-            if (!user_id) {
-                user_id = window.prompt('Enter your nick name!');
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.6.0/dist/css/bootstrap.min.css">
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+        
+        body {
+            background-color: #f5f5f5;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            height: 100vh;
+            overflow: hidden;
+        }
+        
+        .home-wrap {
+            height: 100vh;
+        }
+        
+        .g-top {
+            height: 80vh;
+            position: relative;
+        }
+        
+        .top-remote-video-show-wrap {
+            height: 100%;
+        }
+        
+        .call-wrap {
+            height: 100%;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        
+        .video-wrap {
+            height: 100%;
+            padding: 10px;
+        }
+        
+        .userbox {
+            flex: 1 1 300px;
+            margin: 10px;
+            background: #000;
+            border-radius: 8px;
+            overflow: hidden;
+            position: relative;
+            min-height: 200px;
+        }
+        
+        .userbox video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        
+        .userbox h2 {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(0,0,0,0.6);
+            padding: 5px 10px;
+            border-radius: 5px;
+            color: white;
+            z-index: 10;
+        }
+        
+        .g-right-details-wrap {
+            border-left: 1px solid #ddd;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .g-bottom {
+            height: 10vh;
+            padding: 0 20px;
+        }
+        
+        .action-icon-style {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            background: #eaebec;
+            transition: all 0.3s;
+        }
+        
+        .action-icon-style:hover {
+            background: #d5d6d7;
+            transform: scale(1.05);
+        }
+        
+        .end-call-wrap {
+            background: #ff3b30 !important;
+            color: white;
+        }
+        
+        .g-top-left {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            border-radius: 8px;
+            padding: 10px;
+            z-index: 100;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+        }
+        
+        .log-container {
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 10px;
+            border-radius: 8px;
+            max-height: 200px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 12px;
+            margin-top: 10px;
+            display: none;
+        }
+        
+        .log-entry {
+            margin-bottom: 5px;
+            padding: 3px;
+            border-left: 3px solid #3498db;
+        }
+        
+        .log-error {
+            border-left-color: #e74c3c;
+        }
+        
+        .log-success {
+            border-left-color: #2ecc71;
+        }
+        
+        .debug-toggle {
+            position: absolute;
+            bottom: 100px;
+            right: 20px;
+            z-index: 100;
+        }
+        
+        /* Responsive adjustments */
+        @media (max-width: 992px) {
+            .top-remote-video-show-wrap {
+                flex-direction: column;
             }
-
-            if (!user_id || !meeting_id) {
-                window.location.href = '/sign';
-                return;
+            
+            #meetingContainer {
+                flex-basis: 60% !important;
             }
-            $("#meetingContainer").show();
-            $("#meetingbox").hide();
-            $(".username_holder").val(user_id);
-            MyApp._init(user_id, meeting_id);
-        });
-    </script>
+            
+            .g-right-details-wrap {
+                flex-basis: 40% !important;
+            }
+        }
+        
+        @media (max-width: 768px) {
+            .g-bottom {
+                padding: 0 10px;
+            }
+            
+            .action-icon-style {
+                width: 40px;
+                height: 40px;
+            }
+            
+            .userbox {
+                flex-basis: 100%;
+            }
+            
+            #meetingContainer {
+                flex-basis: 100% !important;
+            }
+            
+            .g-right-details-wrap {
+                display: none !important;
+            }
+            
+            .mobile-chat-toggle {
+                display: block !important;
+            }
+        }
+        
+        .mobile-chat-toggle {
+            display: none;
+            position: fixed;
+            bottom: 80px;
+            right: 20px;
+            z-index: 100;
+        }
+        
+        .ice-config-box {
+            background: white;
+            color: #333;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 15px;
+            font-size: 14px;
+        }
+    </style>
 </head>
-
 <body>
-    <div id="meetingbox" style="display: none;">
-        <p>It seems you are not trying to join any meeting!
-            You may start a new meeting. Here is generated for you. <a id='meetingid' href="#"></a>
-        </p>
-    </div>
-
     <main class="container-fluid d-flex flex-column home-wrap">
         <div class="g-top text-light">
-            <div class="top-remote-video-show-wrap d-flex">
-                <div id="meetingContainer" style="display: none;flex-basis: 75%;">
-                    <h1 id='meetingname'></h1>
-                    <div class="call-wrap " style="background-color: black;">
-                        <div id='divUsers' class="video-wrap" style="display:none;display: flex;flex-wrap: wrap;">
+            <div class="top-remote-video-show-wrap d-flex h-100">
+                <div id="meetingContainer" style="flex-basis: 75%;">
+                    <h1 id='meetingname'>Meeting Room</h1>
+                    <div class="call-wrap h-100" style="background-color: black;">
+                        <div id='divUsers' class="video-wrap d-flex flex-wrap">
                             <div id="me" class="userbox div-center-column">
-                                <h2 class="display-center" style="font-size: 14px;"></h2>
-                                <div class="display-center">
+                                <h2 class="display-center" style="font-size: 14px;">You</h2>
+                                <div class="display-center h-100">
                                     <video autoplay muted id="localVideoCtr" />
                                 </div>
                             </div>
-                            <div id="otherTemplate" class="userbox div-center-column" style="display:none">
-                                <h2 class="display-center" style="font-size: 14px;"></h2>
-                                <div class="display-center">
-                                    <video autoplay muted id="remoteVideoCtr111"></video>
-                                    <audio autoplay controls style="display:none" id="remoteAudioCtr111"></audio>
-                                </div>
-                            </div>
+                            <!-- Remote users will be added here dynamically -->
                         </div>
                     </div>
                 </div>
-                <div class="g-right-details-wrap bg-light text-secondary h-100" style="flex-basis: 25%;z-index: 1;display: none;">
+                <div class="g-right-details-wrap bg-light text-secondary h-100" style="flex-basis: 25%;">
                     <div class="meeting-heading-wrap d-flex justify-content-between align-items-center pr-3 pl-3" style="height: 10vh;">
-                        <div class="meeting-heading font-weight-bold cursor-pointer"> Meeting Details</div>
+                        <div class="meeting-heading font-weight-bold cursor-pointer">Meeting Details</div>
                         <div class="meeting-heading-cross display-center cursor-pointer">
-                            <span class="material-icons">
-                                clear
-                            </span>
+                            <span class="material-icons">clear</span>
                         </div>
                     </div>
                     <div class="people-chat-wrap d-flex justify-content-between align-items-center border-bottom ml-3 mr-3 pl-3 pr-3" style="height: 10vh;font-size: 14px;">
                         <div class="people-heading display-center cursor-pointer">
                             <div class="people-heading-icon display-center mr-1">
-                                <span class="material-icons">
-                                    people
-                                </span>
+                                <span class="material-icons">people</span>
                             </div>
-                            <div class="people-heading-text display-center ">Participant (<span class="participant-count">1</span>)</div>
+                            <div class="people-heading-text display-center">Participant (<span class="participant-count">1</span>)</div>
                         </div>
                         <div class="chat-heading d-flex justify-content-around align-items-center cursor-pointer">
-                            <div class="chat-heading-icon display-center mr-1"><span class="material-icons">
-                                    message
-                                </span></div>
-                            <div class="chat-heading-text">
-                                Chat
+                            <div class="chat-heading-icon display-center mr-1">
+                                <span class="material-icons">message</span>
                             </div>
+                            <div class="chat-heading-text">Chat</div>
                         </div>
                     </div>
                     <div class="in-call-chat-wrap mr-3 ml-3 mt-4" style="font-size: 14px;">
-                        <div class="in-call-wrap-up" style="display: none !important;">
-                            <div class="in-call-wrap d-flex justify-content-between align-items-center mb-3">
-                                <div class="participant-img-name-wrap display-center cursor-pointer">
-                                    <div class="participant-img">
-                                        <img src="images/other.jpg" alt="" class="border border-secondary" style="height: 40px;width: 40px;border-radius: 50%;">
-                                    </div>
-                                    <div class="participant-name ml-2">You</div>
-                                </div>
-                                <div class="participant-action-wrap display-center">
-                                    <div class="participant-action-dot display-center mr-2 cursor-pointer">
-                                        <span class="material-icons">
-                                            more_vert
-                                        </span>
-                                    </div>
-                                    <div class="participant-action-pin display-center cursor-pointer">
-                                        <span class="material-icons">
-                                            push_pin
-                                        </span>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
                         <div class="chat-show-wrap text-secondary" style="font-size:14px;">
-                            <div class="chat-message-show" id="messages">
-
-                            </div>
+                            <div class="chat-message-show" id="messages"></div>
                             <div class="chat-message-sent d-flex justify-content-between align-items-center" style="margin-bottom: 35px;">
                                 <div class="chat-message-sent-input" style="width: 85%;">
-                                    <input type="text" name="" class="chat-message-sent-input-field w-100" id="msgbox" placeholder="Send a message to everyone" style="border: navajowhite;border-bottom: 1px solid teal;">
+                                    <input type="text" class="chat-message-sent-input-field w-100" id="msgbox" placeholder="Send a message to everyone" style="border: none; border-bottom: 1px solid teal;">
                                 </div>
                                 <div class="chat-message-sent-action display-center" id="btnsend" style="color: teal;cursor: pointer;">
-                                    <span class="material-icons">
-                                        send
-                                    </span>
+                                    <span class="material-icons">send</span>
                                 </div>
                             </div>
                         </div>
@@ -138,25 +259,24 @@
                 </div>
             </div>
 
-            <div class="g-top-left bg-light text-secondary w-25 d-flex align-items-center justify-content-between pl-2 pr-2">
+            <div class="g-top-left bg-light text-secondary d-flex align-items-center justify-content-between pl-2 pr-2">
                 <div class="top-left-participant-wrap pt-2 cursor-pointer">
-                    <div class="top-left-participant-icon"><span class="material-icons">
-                            people
-                        </span></div>
-                    <div class="top-left-participant-count"></div>
+                    <div class="top-left-participant-icon"><span class="material-icons">people</span></div>
+                    <div class="top-left-participant-count">1</div>
                 </div>
-                <div class="top-left-chat-wrap pt-2 cursor-pointer">
-                    <span class="material-icons">
-                        message
-                    </span>
+                <div class="top-left-chat-wrap pt-2 cursor-pointer ml-2">
+                    <span class="material-icons">message</span>
                 </div>
-                <div class="top-left-time-wrap"></div>
-                <div class="top-left-you-wrap text-light d-none">You</div>
+                <div class="top-left-time-wrap ml-2">00:00</div>
             </div>
+            
+            <button class="btn btn-sm btn-info debug-toggle" id="debugToggle">Debug</button>
+            <button class="btn btn-sm btn-warning mobile-chat-toggle" id="mobileChatToggle">Chat</button>
+            
+            <div class="log-container" id="logContainer"></div>
         </div>
 
         <div class="g-bottom bg-light m-0 d-flex justify-content-between align-items-center">
-            <!-- Left Section - Meeting Details -->
             <div class="bottom-left d-flex align-items-center" style="height:10vh;">
                 <div class="display-center cursor-pointer meeting-details-button">
                     <span class="material-icons mr-1">info</span>
@@ -164,41 +284,33 @@
                 </div>
             </div>
 
-            <!-- Center Section - Main Controls -->
             <div class="d-flex justify-content-center align-items-center" style="height:10vh;">
-                <!-- Mic Control -->
                 <div class="action-icon-style display-center mx-2 cursor-pointer" id="btnMuteUnmute">
-                    <span class="material-icons">mic_off</span>
+                    <span class="material-icons">mic</span>
                 </div>
 
-                <!-- End Call -->
-                <div class="action-icon-style display-center mx-2 cursor-pointer end-call-wrap">
-                    <span class="material-icons text-danger">call</span>
+                <div class="action-icon-style display-center mx-2 cursor-pointer end-call-wrap" id="btnEndCall">
+                    <span class="material-icons text-white">call_end</span>
                 </div>
 
-                <!-- Video Control -->
                 <div class="action-icon-style display-center mx-2 cursor-pointer" id="btnStartStopCam">
-                    <span class="material-icons">videocam_off</span>
+                    <span class="material-icons">videocam</span>
                 </div>
 
-                <!-- Recording Controls -->
                 <div class="display-center mx-2">
                     <button class="btn btn-danger btn-sm" id="start-recording">Start Recording</button>
-                    <button id="download-video" class="btn btn-success btn-sm ml-1" disabled>Download Video</button>
                 </div>
 
-                <!-- Present Now -->
                 <div class="display-center mx-2 cursor-pointer" id="btnStartStopScreenshare">
                     <button class="btn btn-primary btn-sm">
                         <span class="material-icons align-middle">present_to_all</span>
-                        <span class="align-middle">Present Now</span>
+                        <span class="align-middle">Present</span>
                     </button>
                 </div>
             </div>
 
-            <!-- Right Section - Options -->
             <div class="bottom-right d-flex justify-content-center align-items-center mr-3" style="height:10vh;">
-                <div class="option-wrap cursor-pointer display-center" style="position:relative;">
+                <div class="option-wrap cursor-pointer display-center">
                     <div class="option-icon">
                         <span class="material-icons">more_vert</span>
                     </div>
@@ -206,278 +318,510 @@
             </div>
         </div>
 
-        <!-- Meeting Details Panel -->
-        <div class="g-detail" style="display: none; position: fixed; bottom: 80px; left: 20px; background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.2); z-index: 1000; width: 300px;">
-            <div class="g-details-heading d-flex border-bottom">
-                <div class="g-details-heading-detail cursor-pointer p-2">Details</div>
-                <div class="g-details-heading-attachment cursor-pointer p-2">Attachments</div>
-            </div>
-            <div class="g-details-heading-show p-2">
-                <div class="meeting-info">
-                    <h4>Meeting Information</h4>
-                    <p>Meeting URL: <span class="meeting_url"></span></p>
-                    <button class="copy_info btn btn-sm btn-primary">Copy</button>
-                    <span class="link-conf" style="display:none;">Copied!</span>
-                </div>
-            </div>
-            <div class="g-details-heading-show-attachment p-2" style="display:none;">
-                <h4>Attachments</h4>
-                <div class="attachments-list"></div>
-            </div>
-        </div>
-
-        <!-- Leave Meeting Confirmation -->
-        <div class="top-box-show" style="display: none;"></div>
-        <input type="hidden" name="" class="username_holder">
+        <input type="hidden" class="username_holder">
     </main>
 
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/2.0.4/socket.io.js"></script>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script>
-        let mediaRecorder;
-        let recordedBlobs;
-        var recordButton = document.querySelector('#start-recording');
-        var downloadButton = document.querySelector('#download-video');
-        recordButton.addEventListener('click', () => {
-            console.log(recordButton.textContent);
-            if (recordButton.textContent === 'Start Recording') {
-                startRecording();
-                alert("start");
-            } else {
-                stopRecording();
-                recordButton.textContent = 'Start Recording';
-                downloadButton.disabled = false;
-                alert("stop");
-            }
-        });
-
-        downloadButton.addEventListener('click', () => {
-            const blob = new Blob(recordedBlobs, {
-                type: 'video/webm'
-            });
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.style.display = 'none';
-            a.href = url;
-            a.download = 'test.webm';
-            document.body.appendChild(a);
-            a.click();
-            setTimeout(() => {
-                document.body.removeChild(a);
-                window.URL.revokeObjectURL(url);
-            }, 100);
-        });
-
-        function handleDataAvailable(event) {
-            console.log('handleDataAvailable', event);
-            if (event.data && event.data.size > 0) {
-                recordedBlobs.push(event.data);
-            }
-        }
-
-        function startRecording() {
-            navigator.mediaDevices.getUserMedia({
-                video: true,
-                audio: true
-            }).then(stream => {
-                recordedBlobs = [];
-                let options = {
-                    mimeType: 'video/webm;codecs=vp9,opus'
-                };
-                if (!MediaRecorder.isTypeSupported(options.mimeType)) {
-                    console.error(`${options.mimeType} is not supported`);
-                    options = {
-                        mimeType: 'video/webm;codecs=vp8,opus'
-                    };
-                    if (!MediaRecorder.isTypeSupported(options.mimeType)) {
-                        console.error(`${options.mimeType} is not supported`);
-                        options = {
-                            mimeType: 'video/webm'
-                        };
-                        if (!MediaRecorder.isTypeSupported(options.mimeType)) {
-                            console.error(`${options.mimeType} is not supported`);
-                            options = {
-                                mimeType: ''
-                            };
-                        }
-                    }
+        // WebRTC configuration with multiple STUN and TURN servers
+        const configuration = {
+            iceServers: [
+                { urls: 'stun:stun.l.google.com:19302' },
+                { urls: 'stun:stun1.l.google.com:19302' },
+                { urls: 'stun:stun2.l.google.com:19302' },
+                { urls: 'stun:stun3.l.google.com:19302' },
+                { urls: 'stun:stun4.l.google.com:19302' },
+                {
+                    urls: 'turn:openrelay.metered.ca:80',
+                    username: 'openrelayproject',
+                    credential: 'openrelayproject'
+                },
+                {
+                    urls: 'turn:openrelay.metered.ca:443',
+                    username: 'openrelayproject',
+                    credential: 'openrelayproject'
                 }
+            ],
+            iceTransportPolicy: 'all',
+            bundlePolicy: 'max-bundle',
+            rtcpMuxPolicy: 'require'
+        };
 
-                try {
-                    mediaRecorder = new MediaRecorder(stream, options);
-                } catch (e) {
-                    console.error('Exception while creating MediaRecorder:', e);
-                    return;
-                }
+        // Media constraints with fallback options
+        const mediaConstraints = {
+            audio: {
+                channelCount: 1,
+                echoCancellation: true,
+                noiseSuppression: true,
+                sampleRate: 44100,
+                sampleSize: 16
+            },
+            video: {
+                width: { ideal: 1280 },
+                height: { ideal: 720 },
+                frameRate: { ideal: 30 }
+            }
+        };
 
-                console.log('Created MediaRecorder', mediaRecorder, 'with options', options);
-                recordButton.textContent = 'Stop Recording';
-                downloadButton.disabled = true;
-                mediaRecorder.onstop = (event) => {
-                    console.log('Recorder stopped: ', event);
-                    console.log('Recorded Blobs: ', recordedBlobs);
-                };
-                mediaRecorder.ondataavailable = handleDataAvailable;
-                mediaRecorder.start();
-                console.log('MediaRecorder started', mediaRecorder);
-            })
+        // Global variables
+        let localStream = null;
+        let peerConnections = {};
+        let socket = null;
+        let isCallStarted = false;
+        let isMuted = false;
+        let isVideoEnabled = true;
+        let meetingId = null;
+        let userId = null;
+
+        // Debug logging
+        function log(message, type = 'info') {
+            const logContainer = document.getElementById('logContainer');
+            const logEntry = document.createElement('div');
+            logEntry.className = `log-entry ${type === 'error' ? 'log-error' : type === 'success' ? 'log-success' : ''}`;
+            logEntry.textContent = `${new Date().toLocaleTimeString()}: ${message}`;
+            logContainer.appendChild(logEntry);
+            logContainer.scrollTop = logContainer.scrollHeight;
+            console.log(message);
         }
 
-        function stopRecording() {
-            mediaRecorder.stop();
-        }
-
-        $(function() {
-            $(document).on("click", ".option-icon", function() {
-                $(".recording-wrap").slideToggle(200)
-            })
-            
+        // Initialize the application
+        function initApp() {
             const urlParams = new URLSearchParams(window.location.search);
-            var meeting_id = urlParams.get('meetingID');
-            var base_url = window.location.origin;
+            meetingId = urlParams.get('meetingID');
+            userId = urlParams.get('uid');
+            
+            if (!userId) {
+                userId = prompt('Enter your nick name!');
+            }
 
-            $(document).on("click", ".share-attach", function(e) {
-                e.preventDefault();
-                var att_img = $("#customFile").prop('files')[0];
-                var formData = new FormData();
-                formData.append("zipfile", att_img);
-                formData.append("meeting_id", meeting_id);
-                formData.append("username", $('.username_holder').val());
-                console.log(formData);
+            if (!userId || !meetingId) {
+                window.location.href = '/sign';
+                return;
+            }
+            
+            document.getElementById('meetingContainer').style.display = 'block';
+            document.querySelector('.username_holder').value = userId;
+            
+            // Initialize WebRTC
+            initWebRTC();
+            
+            // Connect to signaling server
+            connectSignalingServer();
+            
+            // Start the call
+            startCall();
+        }
 
-                $.ajax({
-                    url: base_url + "/attachimg",
-                    type: 'POST',
-                    data: formData,
-                    contentType: false,
-                    processData: false,
-                    success: function(response) {
-                        console.log(response);
-                    },
-                    error: function() {
-                        console.log('error');
-                    }
-                })
-            })
+        // Initialize WebRTC
+        function initWebRTC() {
+            log('Initializing WebRTC with desktop compatibility settings');
+        }
 
-            $(".custom-file-input").on("change", function() {
-                var fileName = $(this).val().split("\\").pop();
-                $(this).siblings(".custom-file-label").addClass("selected").html(fileName);
-            });
-
-            var time = new Date();
-            var timeDiv = document.getElementsByClassName("top-left-time-wrap");
-            timeDiv[0].innerHTML = time.toLocaleString('en-US', {
-                hour: 'numeric',
-                minute: 'numeric',
-                hour12: true
-            })
-
-            $(document).on('click', '.top-left-participant-wrap', function() {
-                $(".g-right-details-wrap").show(300);
-                $(".in-call-wrap-up").show(300);
-                $(".chat-show-wrap").hide(300);
-            });
-            
-            $(document).on('click', '.top-left-chat-wrap', function() {
-                $(".g-right-details-wrap").show(300);
-                $(".in-call-wrap-up").hide(300);
-                $(".chat-show-wrap").show(300);
-            });
-            
-            $(document).on('click', '.meeting-heading-cross', function() {
-                $(".g-right-details-wrap").hide(300);
-            });
-            
-            $(document).on('click', '.chat-heading', function() {
-                $(".in-call-wrap-up").hide(300);
-                $(".chat-show-wrap").show(300);
-            });
-            
-            $(document).on('click', '.people-heading', function() {
-                $(".in-call-wrap-up").show(300);
-                $(".chat-show-wrap").hide(300);
-            });
-
-            // Meeting Details Button
-            $(document).on('click', '.meeting-details-button', function() {
-                $(".g-detail").toggle(300);
-            });
-            
-            $(document).on("click", ".g-details-heading-detail", function() {
-                $(".g-details-heading-show").show();
-                $(".g-details-heading-show-attachment").hide();
-            })
-            
-            $(document).on("click", ".g-details-heading-attachment", function() {
-                $(".g-details-heading-show").hide();
-                $(".g-details-heading-show-attachment").show();
-            })
-            
-            $(document).on("click", ".copy_info", function() {
-                var $temp = $("<input>");
-                $("body").append($temp);
-                $temp.val($(".meeting_url").text()).select();
-                document.execCommand("copy");
-                $temp.remove();
-                $('.link-conf').show();
-                setTimeout(function() {
-                    $('.link-conf').hide();
-                }, 3000)
-            })
-
-            var url = window.location.href;
-            $(".meeting_url").text(url)
-            
-            setTimeout(function() {
-                var videoWidth = $("video").width();
-                $("video").css({
-                    "width": videoWidth + "px"
+        // Connect to signaling server
+        function connectSignalingServer() {
+            try {
+                // Replace with your actual signaling server URL
+                socket = io('https://your-signaling-server.com');
+                
+                socket.on('connect', () => {
+                    log('Connected to signaling server', 'success');
+                    socket.emit('join-meeting', { meetingId, userId });
                 });
-            }, 1000)
+                
+                socket.on('user-joined', (data) => {
+                    log(`User joined: ${data.userId}`);
+                    createPeerConnection(data.userId);
+                });
+                
+                socket.on('offer', (data) => {
+                    handleOffer(data);
+                });
+                
+                socket.on('answer', (data) => {
+                    handleAnswer(data);
+                });
+                
+                socket.on('ice-candidate', (data) => {
+                    handleIceCandidate(data);
+                });
+                
+                socket.on('user-left', (data) => {
+                    log(`User left: ${data.userId}`);
+                    removePeerConnection(data.userId);
+                });
+                
+                socket.on('connect_error', (error) => {
+                    log('Signaling server connection error: ' + error.message, 'error');
+                });
+            } catch (error) {
+                log('Error connecting to signaling server: ' + error.message, 'error');
+            }
+        }
 
-            // End Call Button
-            $(document).on('click', '.end-call-wrap', function() {
-                $('.top-box-show').css({
-                    "display": "block"
-                }).html('<div class="top-box align-vertical-middle profile-dialoge-show "> <h1 class="mt-2">Leave Meeting</h1> <hr> <div class="call-leave-cancel-action d-flex justify-content-center align-items-center w-100"> <a href="/sign"><button class="call-leave-action btn btn-danger mr-5">Leave</button></a> <button class="call-cancel-action btn btn-secondary">Cancel</button> </div> </div>');
-            })
-            
-            $(document).mouseup(function(e) {
-                var container = new Array();
-                container.push($('.top-box-show'));
-                $.each(container, function(key, value) {
-                    if (!$(value).is(e.target) && $(value).has(e.target).length === 0) {
-                        $(value).empty();
+        // Start the call
+        async function startCall() {
+            try {
+                log('Requesting media access with desktop constraints...');
+                
+                // Try with ideal constraints first
+                try {
+                    localStream = await navigator.mediaDevices.getUserMedia(mediaConstraints);
+                } catch (error) {
+                    log('Failed with ideal constraints, trying fallback: ' + error.message, 'error');
+                    // Fallback to more permissive constraints
+                    localStream = await navigator.mediaDevices.getUserMedia({
+                        audio: true,
+                        video: true
+                    });
+                }
+                
+                const localVideo = document.getElementById('localVideoCtr');
+                if (localVideo) {
+                    localVideo.srcObject = localStream;
+                }
+                
+                log('Media access granted', 'success');
+                isCallStarted = true;
+                
+                // Notify others that we've joined
+                if (socket) {
+                    socket.emit('join-meeting', { meetingId, userId });
+                }
+            } catch (error) {
+                log('Error accessing media devices: ' + error.message, 'error');
+                alert('Could not access your camera or microphone. Please check permissions and try again.');
+            }
+        }
+
+        // Create peer connection
+        function createPeerConnection(targetUserId) {
+            try {
+                log(`Creating peer connection for ${targetUserId}`);
+                
+                const peerConnection = new RTCPeerConnection(configuration);
+                
+                // Add local stream to connection
+                if (localStream) {
+                    localStream.getTracks().forEach(track => {
+                        peerConnection.addTrack(track, localStream);
+                    });
+                }
+                
+                // Handle remote stream
+                peerConnection.ontrack = (event) => {
+                    log(`Received remote stream from ${targetUserId}`);
+                    const remoteStream = event.streams[0];
+                    addRemoteVideo(targetUserId, remoteStream);
+                };
+                
+                // Handle ICE candidates
+                peerConnection.onicecandidate = (event) => {
+                    if (event.candidate && socket) {
+                        socket.emit('ice-candidate', {
+                            targetUserId,
+                            candidate: event.candidate
+                        });
                     }
-                })
-            })
-            
-            $(document).on('click', '.call-cancel-action', function() {
-                $('.top-box-show').html('');
-            })
-            
-            // ENTER KEY SUPPORT FOR CHAT - ADDED CODE
-            $(document).on('keypress', '#msgbox', function(e) {
-                if (e.which === 13) { // 13 is the Enter key code
-                    e.preventDefault(); // Prevent default form submission behavior
-                    $('#btnsend').click(); // Trigger the send button click
-                }
-            });
-            
-            // Add a sample send function if it doesn't exist
-            $(document).on('click', '#btnsend', function() {
-                var message = $('#msgbox').val().trim();
-                if (message) {
-                    // This is where you would normally send the message via your chat system
-                    // For demonstration, we'll just add it to the chat window
-                    var messageHtml = '<div class="message"><strong>You:</strong> ' + message + '</div>';
-                    $('#messages').append(messageHtml);
-                    $('#msgbox').val(''); // Clear the input
+                };
+                
+                // Handle connection state changes
+                peerConnection.onconnectionstatechange = () => {
+                    log(`Connection state with ${targetUserId}: ${peerConnection.connectionState}`);
                     
-                    // Scroll to the bottom of the chat
-                    $('#messages').scrollTop($('#messages')[0].scrollHeight);
+                    if (peerConnection.connectionState === 'connected') {
+                        log(`Connected to ${targetUserId}`, 'success');
+                    } else if (peerConnection.connectionState === 'disconnected' || 
+                               peerConnection.connectionState === 'failed') {
+                        log(`Connection with ${targetUserId} failed`, 'error');
+                    }
+                };
+                
+                // Handle ICE connection state changes
+                peerConnection.oniceconnectionstatechange = () => {
+                    log(`ICE connection state with ${targetUserId}: ${peerConnection.iceConnectionState}`);
+                    
+                    if (peerConnection.iceConnectionState === 'failed') {
+                        log(`ICE connection with ${targetUserId} failed, restarting ICE`, 'error');
+                        // Try to restart ICE
+                        peerConnection.restartIce();
+                    }
+                };
+                
+                peerConnections[targetUserId] = peerConnection;
+                
+                // If we're creating the connection, create an offer
+                if (socket) {
+                    createOffer(targetUserId);
+                }
+            } catch (error) {
+                log('Error creating peer connection: ' + error.message, 'error');
+            }
+        }
+
+        // Create offer
+        async function createOffer(targetUserId) {
+            try {
+                const peerConnection = peerConnections[targetUserId];
+                if (!peerConnection) return;
+                
+                const offer = await peerConnection.createOffer();
+                await peerConnection.setLocalDescription(offer);
+                
+                if (socket) {
+                    socket.emit('offer', {
+                        targetUserId,
+                        offer
+                    });
+                }
+            } catch (error) {
+                log('Error creating offer: ' + error.message, 'error');
+            }
+        }
+
+        // Handle offer
+        async function handleOffer(data) {
+            try {
+                const { userId: targetUserId, offer } = data;
+                
+                if (!peerConnections[targetUserId]) {
+                    createPeerConnection(targetUserId);
+                }
+                
+                const peerConnection = peerConnections[targetUserId];
+                await peerConnection.setRemoteDescription(offer);
+                
+                const answer = await peerConnection.createAnswer();
+                await peerConnection.setLocalDescription(answer);
+                
+                if (socket) {
+                    socket.emit('answer', {
+                        targetUserId,
+                        answer
+                    });
+                }
+            } catch (error) {
+                log('Error handling offer: ' + error.message, 'error');
+            }
+        }
+
+        // Handle answer
+        async function handleAnswer(data) {
+            try {
+                const { userId: targetUserId, answer } = data;
+                
+                const peerConnection = peerConnections[targetUserId];
+                if (peerConnection) {
+                    await peerConnection.setRemoteDescription(answer);
+                }
+            } catch (error) {
+                log('Error handling answer: ' + error.message, 'error');
+            }
+        }
+
+        // Handle ICE candidate
+        async function handleIceCandidate(data) {
+            try {
+                const { userId: targetUserId, candidate } = data;
+                
+                const peerConnection = peerConnections[targetUserId];
+                if (peerConnection && candidate) {
+                    await peerConnection.addIceCandidate(candidate);
+                }
+            } catch (error) {
+                log('Error adding ICE candidate: ' + error.message, 'error');
+            }
+        }
+
+        // Add remote video
+        function addRemoteVideo(userId, stream) {
+            // Check if video element already exists for this user
+            let remoteVideo = document.getElementById(`remoteVideo-${userId}`);
+            
+            if (!remoteVideo) {
+                // Clone the template
+                const template = document.getElementById('otherTemplate');
+                if (!template) return;
+                
+                const clone = template.cloneNode(true);
+                clone.id = `remote-${userId}`;
+                clone.style.display = 'flex';
+                
+                // Update user name
+                const userNameEl = clone.querySelector('h2');
+                if (userNameEl) {
+                    userNameEl.textContent = userId;
+                }
+                
+                // Get video element
+                remoteVideo = clone.querySelector('video');
+                if (remoteVideo) {
+                    remoteVideo.id = `remoteVideo-${userId}`;
+                }
+                
+                // Add to container
+                const divUsers = document.getElementById('divUsers');
+                if (divUsers) {
+                    divUsers.appendChild(clone);
+                }
+            }
+            
+            // Set video source
+            if (remoteVideo && stream) {
+                remoteVideo.srcObject = stream;
+            }
+            
+            // Update participant count
+            updateParticipantCount();
+        }
+
+        // Remove peer connection
+        function removePeerConnection(userId) {
+            if (peerConnections[userId]) {
+                peerConnections[userId].close();
+                delete peerConnections[userId];
+            }
+            
+            // Remove video element
+            const remoteElement = document.getElementById(`remote-${userId}`);
+            if (remoteElement) {
+                remoteElement.remove();
+            }
+            
+            // Update participant count
+            updateParticipantCount();
+        }
+
+        // Update participant count
+        function updateParticipantCount() {
+            const participantCount = Object.keys(peerConnections).length + 1; // +1 for local user
+            const countElements = document.querySelectorAll('.participant-count, .top-left-participant-count');
+            
+            countElements.forEach(el => {
+                el.textContent = participantCount;
+            });
+        }
+
+        // Toggle mute
+        function toggleMute() {
+            if (!localStream) return;
+            
+            const audioTracks = localStream.getAudioTracks();
+            if (audioTracks.length > 0) {
+                isMuted = !isMuted;
+                audioTracks[0].enabled = !isMuted;
+                
+                const btn = document.getElementById('btnMuteUnmute');
+                if (btn) {
+                    btn.innerHTML = isMuted ? '<span class="material-icons">mic_off</span>' : '<span class="material-icons">mic</span>';
+                }
+                
+                log(isMuted ? 'Microphone muted' : 'Microphone unmuted');
+            }
+        }
+
+        // Toggle video
+        function toggleVideo() {
+            if (!localStream) return;
+            
+            const videoTracks = localStream.getVideoTracks();
+            if (videoTracks.length > 0) {
+                isVideoEnabled = !isVideoEnabled;
+                videoTracks[0].enabled = isVideoEnabled;
+                
+                const btn = document.getElementById('btnStartStopCam');
+                if (btn) {
+                    btn.innerHTML = isVideoEnabled ? '<span class="material-icons">videocam</span>' : '<span class="material-icons">videocam_off</span>';
+                }
+                
+                log(isVideoEnabled ? 'Video enabled' : 'Video disabled');
+            }
+        }
+
+        // End call
+        function endCall() {
+            // Close all peer connections
+            Object.keys(peerConnections).forEach(userId => {
+                removePeerConnection(userId);
+            });
+            
+            // Stop local stream
+            if (localStream) {
+                localStream.getTracks().forEach(track => track.stop());
+            }
+            
+            // Disconnect from signaling server
+            if (socket) {
+                socket.disconnect();
+            }
+            
+            log('Call ended');
+            window.location.href = '/sign';
+        }
+
+        // Initialize when page loads
+        $(document).ready(function() {
+            // Initialize the app
+            initApp();
+            
+            // Set up event listeners
+            document.getElementById('btnMuteUnmute').addEventListener('click', toggleMute);
+            document.getElementById('btnStartStopCam').addEventListener('click', toggleVideo);
+            document.getElementById('btnEndCall').addEventListener('click', endCall);
+            document.getElementById('debugToggle').addEventListener('click', function() {
+                const logContainer = document.getElementById('logContainer');
+                logContainer.style.display = logContainer.style.display === 'none' ? 'block' : 'none';
+            });
+            
+            // Set up timer
+            let startTime = Date.now();
+            setInterval(() => {
+                const elapsed = Math.floor((Date.now() - startTime) / 1000);
+                const minutes = Math.floor(elapsed / 60);
+                const seconds = elapsed % 60;
+                document.querySelector('.top-left-time-wrap').textContent = 
+                    `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+            }, 1000);
+            
+            // Chat functionality
+            document.getElementById('btnsend').addEventListener('click', function() {
+                const msgbox = document.getElementById('msgbox');
+                const message = msgbox.value.trim();
+                
+                if (message && socket) {
+                    socket.emit('chat-message', {
+                        userId,
+                        message
+                    });
+                    
+                    // Add to local chat
+                    addChatMessage(userId, message);
+                    msgbox.value = '';
                 }
             });
-        })
+            
+            // Enter key for chat
+            document.getElementById('msgbox').addEventListener('keypress', function(e) {
+                if (e.which === 13) {
+                    document.getElementById('btnsend').click();
+                }
+            });
+            
+            // Mobile chat toggle
+            document.getElementById('mobileChatToggle').addEventListener('click', function() {
+                const chatPanel = document.querySelector('.g-right-details-wrap');
+                chatPanel.style.display = chatPanel.style.display === 'none' ? 'flex' : 'none';
+            });
+        });
+
+        // Add chat message
+        function addChatMessage(sender, message) {
+            const messagesContainer = document.getElementById('messages');
+            const messageElement = document.createElement('div');
+            messageElement.innerHTML = `<strong>${sender}:</strong> ${message}`;
+            messagesContainer.appendChild(messageElement);
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }
     </script>
 </body>
 </html>
