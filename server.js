@@ -7,7 +7,7 @@ const path = require('path');
 
 const app = express();
 
-// HTTPS setup (optional)
+// HTTPS setup (optional - Render handles HTTPS automatically)
 const options = {
   key: fs.existsSync('key.pem') ? fs.readFileSync('key.pem') : null,
   cert: fs.existsSync('cert.pem') ? fs.readFileSync('cert.pem') : null,
@@ -17,8 +17,20 @@ const server = options.key && options.cert
   ? https.createServer(options, app)
   : require('http').createServer(app);
 
+// Get Render-specific info
+const HOST = process.env.RENDER_EXTERNAL_HOSTNAME || 'localhost';
+const PORT = process.env.PORT || 3000;
+
 const io = new Server(server, {
-  cors: { origin: '*', methods: ['GET', 'POST'] },
+  cors: { 
+    origin: [
+      `https://${HOST}`,
+      `https://tpsc-final.onrender.com`,
+      "http://localhost:3000",
+      "http://localhost:8080"
+    ],
+    methods: ['GET', 'POST'] 
+  },
 });
 
 // Serve static files
@@ -33,8 +45,12 @@ app.get('/', (req, res) => res.redirect('/sign'));
 app.get('/sign', (req, res) => res.render('signin'));
 app.get('/appHome', (req, res) => res.render('appHome'));
 
+// Health check endpoint for Render
+app.get('/health', (req, res) => {
+  res.status(200).json({ status: 'OK', timestamp: new Date().toISOString() });
+});
+
 // Meetings store
-// Structure: { meetingID: { userID: socket.id } }
 const meetings = {};
 
 io.on('connection', socket => {
@@ -84,5 +100,7 @@ io.on('connection', socket => {
 });
 
 // Start server
-const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+server.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+  console.log(`External URL: https://${HOST || 'localhost'}`);
+});
