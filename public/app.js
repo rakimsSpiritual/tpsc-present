@@ -260,10 +260,6 @@ var WrtcHelper = (function () {
     };
     // New remote media stream was added
     connection.ontrack = function (event) {
-      // event.track.onunmute = () => {
-      //     alert('unmuted');
-      // };
-
       if (!_remoteVideoStreams[connid]) {
         _remoteVideoStreams[connid] = new MediaStream();
       }
@@ -276,28 +272,11 @@ var WrtcHelper = (function () {
           .getVideoTracks()
           .forEach((t) => _remoteVideoStreams[connid].removeTrack(t));
         _remoteVideoStreams[connid].addTrack(event.track);
-        //_remoteVideoStreams[connid].getTracks().forEach(t => console.log(t));
 
         var _remoteVideoPlayer = document.getElementById("v_" + connid);
         _remoteVideoPlayer.srcObject = null;
         _remoteVideoPlayer.srcObject = _remoteVideoStreams[connid];
         _remoteVideoPlayer.load();
-        //$(_remoteVideoPlayer).show();
-
-        // event.track.onmute = function() {
-        //     console.log(connid + ' muted');
-        //    console.log(this.muted+ ' muted');
-        //    console.log(event.track.muted+ ' muted');
-        //    console.log(this.readyState+ ' muted');
-        //    console.log('muted',this);
-        //    console.log('muted',_remoteVideoStreams[connid] );
-        //    console.log('muted',_remoteVideoPlayer.paused);
-        //    console.log('muted',_remoteVideoPlayer.readyState );
-        //    console.log('muted',_remoteVideoPlayer.ended );
-        //    if(this.muted){
-        //     //_remoteVideoPlayer.srcObject = null;
-        //    }
-        // };
       } else if (event.track.kind == "audio") {
         var _remoteAudioPlayer = document.getElementById("a_" + connid);
         _remoteAudioStreams[connid]
@@ -326,7 +305,6 @@ var WrtcHelper = (function () {
   }
 
   async function _createOffer(connid) {
-    //await createConnection();
     var connection = peers_conns[connid];
     console.log("connection.signalingState:" + connection.signalingState);
     var offer = await connection.createOffer();
@@ -429,96 +407,144 @@ var WrtcHelper = (function () {
     },
   };
 })();
+
 var MyApp = (function () {
   var socket = null;
-  var socker_url = "http://localhost:3000";
+  var socket_url = "http://localhost:3000";
   var meeting_id = "";
   var user_id = "";
+  
+  // Mediasoup variables
+  var device = null;
+  var sendTransport = null;
+  var recvTransport = null;
+  var producers = new Map();
+  var consumers = new Map();
+  var useMediasoup = true;
 
-  function init(uid, mid) {
+  async function init(uid, mid) {
     user_id = uid;
     meeting_id = mid;
 
-    // $("#meetingname").text(meeting_id);
     $("#me h2").text(user_id + "(Me)");
     document.title = user_id;
 
-    SignalServerEventBinding();
-    EventBinding();
-    $(document).on("click", ".share-button-wrap", function () {
-      var attachFileArea = document.querySelector(".show-attach-file");
-      var fileeName = $("#customFile").val().split("\\").pop();
-      alert(fileeName);
-      var FileePath = "/attachment/" + meeting_id + "/" + fileeName + "";
-      // send({
-      //   type: "filee",
-      //   username: user_id,
-      //   meetingid: meeting_id,
-      //   FileePath: FileePath,
-      //   fileeName: fileeName,
-      // });
-      attachFileArea.innerHTML +=
-        "<div class='left-align' style='display:flex;align-items:center;'><img src='assets/images/other.jpg' style='height:40px;width:40px;' class='caller-image circle'><div style='font-weight:600;margin:0 5px;'>" +
-        user_id +
-        "</div>: <div><a style='color:#007bff;' href='" +
-        FileePath +
-        "' download>" +
-        fileeName +
-        "</a></div></div><br/>";
-      $("label.custom-file-label").text("");
-      socket.emit("fileTransferToOther", {
-        username: user_id,
-        meetingid: meeting_id,
-        FileePath: FileePath,
-        fileeName: fileeName,
-      });
-    });
+    // Initialize mediasoup device if available
+    try {
+      if (typeof mediasoupClient !== 'undefined') {
+        device = new mediasoupClient.Device();
+        await SignalServerEventBinding();
+        EventBinding();
+      } else {
+        throw new Error('Mediasoup client not available');
+      }
+    } catch (error) {
+      console.error('Error initializing mediasoup device:', error);
+      useMediasoup = false;
+      // Fallback to original WebRTC implementation
+      await OriginalWebRTCFallback();
+    }
   }
 
-  // function sentFileFunc(FileSenderMeetingID, FileSenderUsername) {
+  async function SignalServerEventBinding() {
+    socket = io.connect(socket_url);
 
-  // }
-  function SignalServerEventBinding() {
-    // Set up the SignalR connection
-    //$.connection.hub.logging = true;
+    // Request router RTP capabilities for mediasoup
+    if (useMediasoup) {
+      try {
+        socket.emit('getRouterRtpCapabilities', (data) => {
+          if (data.error) {
+            console.error('Error getting router capabilities:', data.error);
+            useMediasoup = false;
+            OriginalWebRTCFallback();
+            return;
+          }
 
-    //_hub = $.connection.webRtcHub;
-    //$.connection.hub.url = _hubUrl;
+          device.load({ routerRtpCapabilities: data.rtpCapabilities })
+            .then(() => {
+              createSendTransport();
+            })
+            .catch(error => {
+              console.error('Error loading device:', error);
+              useMediasoup = false;
+              OriginalWebRTCFallback();
+            });
+        });
+      } catch (error) {
+        console.error('Error setting up mediasoup:', error);
+        useMediasoup = false;
+        OriginalWebRTCFallback();
+      }
+    }
 
-    socket = io.connect();
+    // Handle new producers from other users (mediasoup)
+    socket.on('newProducer', async ({ producerId, kind, socketId }) => {
+      if (!useMediasoup || socketId === socket.id) return;
+      
+      if (!recvTransport) {
+        createRecvTransport().then(() => {
+          consumeProducer(producerId, kind);
+        });
+      } else {
+        consumeProducer(producerId, kind);
+      }
+    });
 
-    var serverFn = function (data, to_connid) {
-      socket.emit("exchangeSDP", {
-        message: data,
-        to_connid: to_connid,
-      });
-      //_hub.server.exchangeSDP(data, to_connid);
-    };
+    // Handle existing producers when joining (mediasoup)
+    socket.on('existingProducers', async (producerList) => {
+      if (!useMediasoup) return;
+      
+      for (const { producerId, kind, socketId } of producerList) {
+        if (socketId !== socket.id) {
+          if (!recvTransport) {
+            await createRecvTransport();
+          }
+          await consumeProducer(producerId, kind);
+        }
+      }
+    });
 
+    // Handle producer closure (mediasoup)
+    socket.on('producerClosed', ({ producerId }) => {
+      if (!useMediasoup) return;
+      
+      const consumer = consumers.get(producerId);
+      if (consumer) {
+        consumer.close();
+        consumers.delete(producerId);
+        $(`#remote_${producerId}`).remove();
+      }
+    });
+
+    // Original socket event handlers (for fallback)
     socket.on("reset", function () {
       location.reload();
     });
 
     socket.on("exchangeSDP", async function (data) {
-      //alert(from_connid);
-      await WrtcHelper.ExecuteClientFn(data.message, data.from_connid);
+      if (!useMediasoup) {
+        await WrtcHelper.ExecuteClientFn(data.message, data.from_connid);
+      }
     });
 
     socket.on("informAboutNewConnection", function (data) {
-      AddNewUser(data.other_user_id, data.connId, data.userNumber);
-      WrtcHelper.createNewConnection(data.connId);
+      if (!useMediasoup) {
+        AddNewUser(data.other_user_id, data.connId, data.userNumber);
+        WrtcHelper.createNewConnection(data.connId);
+      }
     });
 
     socket.on("informAboutConnectionEnd", function (data) {
-      $("#" + data.connId).remove();
-      $(".participant-count").text(data.userCoun);
-      $("#participant_" + data.connId + "").remove();
-      WrtcHelper.closeExistingConnection(data.connId);
+      if (!useMediasoup) {
+        $("#" + data.connId).remove();
+        $(".participant-count").text(data.userCoun);
+        $("#participant_" + data.connId).remove();
+        WrtcHelper.closeExistingConnection(data.connId);
+      }
     });
 
     socket.on("showChatMessage", function (data) {
       var time = new Date();
-      // var timeDiv = document.getElementsByClassName("top-left-time-wrap");
       var lTime = time.toLocaleString("en-US", {
         hour: "numeric",
         minute: "numeric",
@@ -535,26 +561,9 @@ var MyApp = (function () {
       );
       $("#messages").append(div);
     });
-    socket.on("showFileMessage", function (data) {
-      var time = new Date();
-      // var timeDiv = document.getElementsByClassName("top-left-time-wrap");
-      var lTime = time.toLocaleString("en-US", {
-        hour: "numeric",
-        minute: "numeric",
-        hour12: true,
-      });
 
+    socket.on("showFileMessage", function (data) {
       var attachFileArea = document.querySelector(".show-attach-file");
-      // var fileeName = $("#customFile").val().split("\\").pop();
-      // alert(fileeName);
-      // var FileePath = "/attachment/" + meeting_id + "/" + fileeName + "";
-      // send({
-      //   type: "filee",
-      //   username: user_id,
-      //   meetingid: meeting_id,
-      //   FileePath: FileePath,
-      //   fileeName: fileeName,
-      // });
       attachFileArea.innerHTML +=
         "<div class='left-align' style='display:flex;align-items:center;'><img src='assets/images/other.jpg' style='height:40px;width:40px;' class='caller-image circle'><div style='font-weight:600;margin:0 5px;'>" +
         data.username +
@@ -567,19 +576,21 @@ var MyApp = (function () {
 
     socket.on("connect", () => {
       if (socket.connected) {
-        WrtcHelper.init(serverFn, socket.id);
-
         if (user_id != "" && meeting_id != "") {
           socket.emit("userconnect", {
             dsiplayName: user_id,
             meetingid: meeting_id,
           });
-          //_hub.server.connect(user_id, meeting_id)
         }
       }
     });
 
     socket.on("userconnected", function (other_users) {
+      if (useMediasoup) {
+        // For mediasoup, we handle connections differently
+        return;
+      }
+      
       var userNumber = other_users.length;
       var userNumb = userNumber + 1;
       $("#divUsers .other").remove();
@@ -597,6 +608,235 @@ var MyApp = (function () {
       $("#messages").show();
       $("#divUsers").show();
     });
+
+    // Handle mediasoup-specific connection event
+    socket.on('userConnectedMediasoup', (data) => {
+      if (useMediasoup) {
+        $(".participant-count").text(data.participantCount);
+        
+        // If we're the new user, request existing producers
+        if (data.isNewUser) {
+          socket.emit('getProducers');
+        }
+      }
+    });
+
+    return new Promise((resolve) => {
+      socket.on('connected', resolve);
+    });
+  }
+
+  async function createSendTransport() {
+    try {
+      socket.emit('createWebRtcTransport', { consuming: false }, (data) => {
+        if (data.error) {
+          console.error('Error creating send transport:', data.error);
+          useMediasoup = false;
+          OriginalWebRTCFallback();
+          return;
+        }
+
+        sendTransport = device.createSendTransport(data);
+        
+        sendTransport.on('connect', async ({ dtlsParameters }, callback, errback) => {
+          socket.emit('connectTransport', {
+            transportId: sendTransport.id,
+            dtlsParameters
+          }, (response) => {
+            if (response.error) {
+              errback(response.error);
+            } else {
+              callback();
+            }
+          });
+        });
+
+        sendTransport.on('produce', async ({ kind, rtpParameters }, callback, errback) => {
+          socket.emit('produce', {
+            transportId: sendTransport.id,
+            kind,
+            rtpParameters
+          }, (response) => {
+            if (response.error) {
+              errback(response.error);
+            } else {
+              callback({ id: response.id });
+            }
+          });
+        });
+
+        // Start producing audio and video
+        startMediaProduction();
+      });
+    } catch (error) {
+      console.error('Error creating send transport:', error);
+      useMediasoup = false;
+      OriginalWebRTCFallback();
+    }
+  }
+
+  async function createRecvTransport() {
+    return new Promise((resolve, reject) => {
+      socket.emit('createWebRtcTransport', { consuming: true }, (data) => {
+        if (data.error) {
+          console.error('Error creating recv transport:', data.error);
+          reject(data.error);
+          return;
+        }
+
+        recvTransport = device.createRecvTransport(data);
+        
+        recvTransport.on('connect', async ({ dtlsParameters }, callback, errback) => {
+          socket.emit('connectTransport', {
+            transportId: recvTransport.id,
+            dtlsParameters
+          }, (response) => {
+            if (response.error) {
+              errback(response.error);
+            } else {
+              callback();
+            }
+          });
+        });
+
+        resolve();
+      });
+    });
+  }
+
+  async function startMediaProduction() {
+    try {
+      // Get user media
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: true,
+        audio: true
+      });
+
+      // Produce video
+      const videoTrack = stream.getVideoTracks()[0];
+      if (videoTrack) {
+        const videoProducer = await sendTransport.produce({ track: videoTrack });
+        producers.set('video', videoProducer);
+        
+        // Show local video
+        const localVideo = document.getElementById("localVideoCtr");
+        if (localVideo) {
+          localVideo.srcObject = new MediaStream([videoTrack]);
+        }
+      }
+
+      // Produce audio
+      const audioTrack = stream.getAudioTracks()[0];
+      if (audioTrack) {
+        const audioProducer = await sendTransport.produce({ track: audioTrack });
+        producers.set('audio', audioProducer);
+        
+        // Handle audio mute/unmute
+        $("#btnMuteUnmute").off('click').on("click", function () {
+          if (audioTrack) {
+            audioTrack.enabled = !audioTrack.enabled;
+            $(this).html(
+              audioTrack.enabled 
+                ? '<span class="material-icons">mic</span>'
+                : '<span class="material-icons">mic_off</span>'
+            );
+          }
+        });
+      }
+
+    } catch (error) {
+      console.error('Error starting media production:', error);
+    }
+  }
+
+  async function consumeProducer(producerId, kind) {
+    try {
+      // Check if we already have a consumer for this producer
+      if (consumers.has(producerId)) return;
+
+      // Consume the producer
+      const { rtpCapabilities } = device;
+      const consumer = await recvTransport.consume({
+        producerId,
+        rtpCapabilities,
+        paused: true
+      });
+
+      consumers.set(producerId, consumer);
+
+      // Resume the consumer
+      socket.emit('resumeConsumer', { consumerId: consumer.id }, (response) => {
+        if (!response.error) {
+          consumer.resume();
+        }
+      });
+
+      // Get the track from the consumer
+      const { track } = consumer;
+
+      // Create a new video element for remote video
+      if (kind === 'video') {
+        const remoteVideo = document.createElement('video');
+        remoteVideo.id = `remote_video_${producerId}`;
+        remoteVideo.autoplay = true;
+        remoteVideo.playsInline = true;
+        remoteVideo.muted = false;
+        remoteVideo.srcObject = new MediaStream([track]);
+        
+        // Add to DOM
+        const remoteVideoContainer = document.createElement('div');
+        remoteVideoContainer.className = 'userbox div-center-column other';
+        remoteVideoContainer.id = `remote_${producerId}`;
+        remoteVideoContainer.style.display = 'block';
+        
+        const usernameHeader = document.createElement('h2');
+        usernameHeader.className = 'display-center';
+        usernameHeader.style.fontSize = '14px';
+        usernameHeader.textContent = `Remote User`;
+        
+        const videoContainer = document.createElement('div');
+        videoContainer.className = 'display-center';
+        videoContainer.appendChild(remoteVideo);
+        
+        remoteVideoContainer.appendChild(usernameHeader);
+        remoteVideoContainer.appendChild(videoContainer);
+        
+        document.getElementById('divUsers').appendChild(remoteVideoContainer);
+        
+        // Also add to participants list
+        $(".in-call-wrap-up").append(
+          `<div class="in-call-wrap d-flex justify-content-between align-items-center mb-3" id="participant_${producerId}">
+            <div class="participant-img-name-wrap display-center cursor-pointer">
+              <div class="participant-img">
+                <img src="images/me2.png" alt="" class="border border-secondary" style="height: 40px;width: 40px;border-radius: 50%;">
+              </div>
+              <div class="participant-name ml-2">Remote User</div>
+            </div>
+            <div class="participant-action-wrap display-center">
+              <div class="participant-action-dot display-center mr-2 cursor-pointer">
+                <span class="material-icons">more_vert</span>
+              </div>
+              <div class="participant-action-pin display-center cursor-pointer">
+                <span class="material-icons">push_pin</span>
+              </div>
+            </div>
+          </div>`
+        );
+      }
+
+    } catch (error) {
+      console.error('Error consuming producer:', error);
+    }
+  }
+
+  async function OriginalWebRTCFallback() {
+    // Fallback to the original WebRTC implementation
+    WrtcHelper.init(function(data, to_connid) {
+      socket.emit("exchangeSDP", {
+        message: data,
+        to_connid: to_connid,
+      });
+    }, socket.id);
   }
 
   function EventBinding() {
@@ -605,16 +845,15 @@ var MyApp = (function () {
     });
 
     $("#btnsend").on("click", function () {
-      //_hub.server.sendMessage($('#msgbox').val());
       socket.emit("sendMessage", $("#msgbox").val());
       $("#msgbox").val("");
     });
 
-    // ADD THIS ENTER KEY HANDLER
-    $("#msgbox").on("keypress", function (e) {
-      if (e.which === 13) { // 13 is the Enter key code
-        e.preventDefault(); // Prevent default form submission behavior
-        $("#btnsend").click(); // Trigger the send button click
+    // Add Enter key support for chat
+    $("#msgbox").on("keypress", function(e) {
+      if (e.which === 13) {
+        e.preventDefault();
+        $("#btnsend").click();
       }
     });
 
@@ -622,7 +861,6 @@ var MyApp = (function () {
       this.requestFullscreen();
     });
   }
-  var userNum;
 
   function AddNewUser(other_user_id, connId, userNum) {
     var $newDiv = $("#otherTemplate").clone();
