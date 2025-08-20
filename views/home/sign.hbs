@@ -7,83 +7,20 @@
 
 <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
 <link rel="stylesheet" href="/css/materialize.min.css">
+<link rel="stylesheet" href="/css/stylee.css">
 
 <style>
-  body {
-    margin: 0;
-    font-family: 'Segoe UI', sans-serif;
-    background: linear-gradient(135deg, #00554d, #00897b);
-    color: white;
-    height: 100vh;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    align-items: center;
-  }
-
-  .header-bar {
-    width: 100%;
-    background-color: rgba(0, 85, 77, 0.9);
-    color: white;
-    padding: 15px 20px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    position: absolute;
-    top: 0;
-    left: 0;
-  }
-
-  .header-bar div { margin: 0 5px; }
-
-  .main-card {
-    background-color: rgba(0,0,0,0.4);
-    padding: 30px 40px;
-    border-radius: 12px;
-    width: 90%;
-    max-width: 400px;
-    box-shadow: 0 8px 25px rgba(0,0,0,0.5);
-  }
-
-  .main-card h2 {
-    text-align: center;
-    margin-bottom: 25px;
-    font-weight: 500;
-  }
-
-  .input-field input {
-    color: white;
-  }
-
-  .input-field label {
-    color: #a5d6a7;
-  }
-
-  .input-field input:focus + label {
-    color: #c8e6c9;
-  }
-
-  .input-field input:focus {
-    border-bottom: 1px solid #c8e6c9;
-    box-shadow: 0 1px 0 0 #c8e6c9;
-  }
-
-  .btn {
-    width: 100%;
-    background-color: #00bfa5;
-  }
-
-  .btn:hover {
-    background-color: #26a69a;
-  }
-
-  @media screen and (max-width:600px) {
-    .header-bar {
-      flex-direction: column;
-      text-align: center;
-    }
-    .main-card { padding: 20px; }
-  }
+body { margin:0; font-family:'Segoe UI', sans-serif; background:#f0f0f0; }
+.header-bar { background-color: rgba(0, 85, 77, 0.9); color:white; padding:10px 20px; display:flex; justify-content:space-between; align-items:center; }
+.header-bar div { margin: 0 10px; }
+.main-wrap { margin-top:20px; display:flex; justify-content:center; }
+.join-card { background-color:#00554d; color:white; padding:30px; border-radius:5px; cursor:pointer; font-size:20px; transition: 0.3s; }
+.join-card:hover { background-color:#007361; }
+.form-card { background:#00554d; color:white; padding:30px; border-radius:5px; width:90%; max-width:400px; }
+input, label { color:white !important; }
+@media screen and (max-width:600px) {
+  .header-bar { flex-direction:column; text-align:center; }
+}
 </style>
 </head>
 <body>
@@ -95,27 +32,13 @@
   </div>
 </div>
 
-<div class="main-card">
-  <h2>Join Classroom</h2>
-  <form id="joinForm">
-    <div class="input-field">
-      <i class="material-icons prefix">call_to_action</i>
-      <input id="meetingID" type="text" required>
-      <label for="meetingID">Meeting ID</label>
-    </div>
-    <div class="input-field">
-      <i class="material-icons prefix">person</i>
-      <input id="nickname" type="text" required>
-      <label for="nickname">Your Nickname</label>
-    </div>
-    <button type="submit" class="btn waves-effect waves-light">
-      Join <i class="material-icons right">send</i>
-    </button>
-  </form>
+<div class="main-wrap">
+  <div class="join-card" id="joinBtn">Join Classroom</div>
 </div>
 
 <!-- Scripts -->
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+
 <script>
 function updateTime() {
   const now = new Date();
@@ -128,14 +51,40 @@ setInterval(updateTime, 1000);
 updateTime();
 
 $(document).ready(function() {
-  $('#joinForm').on('submit', function(e) {
+  $('#joinBtn').on('click', function() {
+    const formHtml = `
+      <div class="form-card">
+        <div class="row">
+          <form class="col s12" id="joinForm">
+            <div class="row">
+              <div class="input-field col s12">
+                <i class="material-icons prefix">call_to_action</i>
+                <input id="meetingID" type="text" required>
+                <label for="meetingID">Meeting ID</label>
+              </div>
+            </div>
+            <div class="row">
+              <div class="input-field col s12">
+                <i class="material-icons prefix">person</i>
+                <input id="nickname" type="text" required>
+                <label for="nickname">Your Nickname</label>
+              </div>
+            </div>
+            <button type="submit" class="btn waves-effect waves-light">Join <i class="material-icons right">send</i></button>
+          </form>
+        </div>
+      </div>`;
+    $('.main-wrap').html(formHtml);
+  });
+
+  $(document).on('submit','#joinForm', function(e){
     e.preventDefault();
     const meetingID = $('#meetingID').val().trim();
     const nickname = $('#nickname').val().trim();
-    if (!meetingID || !nickname) {
-      return alert('Meeting ID and Nickname are required!');
-    }
-    const joinUrl = window.location.origin + '/appHome?meetingID=' + encodeURIComponent(meetingID) + '&uid=' + encodeURIComponent(nickname);
+    if(!meetingID || !nickname) return alert('Meeting ID and Nickname are required!');
+    
+    // Generate full appHome URL dynamically
+    const joinUrl = `${window.location.origin}/appHome?meetingID=${encodeURIComponent(meetingID)}&uid=${encodeURIComponent(nickname)}`;
     window.location.href = joinUrl;
   });
 });
