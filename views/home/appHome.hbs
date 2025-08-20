@@ -111,7 +111,7 @@ function log(msg, type='info') {
     console.log(msg);
 }
 
-// Fetch TURN/STUN servers dynamically
+// Fetch TURN/STUN servers dynamically with Xirsys fallback
 async function fetchIceServers() {
     try {
         const res = await fetch('/turn-credentials');
@@ -125,10 +125,21 @@ async function fetchIceServers() {
     } catch(err) {
         log('Failed to fetch ICE servers, using fallback: ' + err.message,'error');
         configuration.iceServers = [
-            { urls: 'stun:stun.l.google.com:19302' },
-            { urls: 'stun:stun1.l.google.com:19302' },
-            { urls: 'stun:stun2.l.google.com:19302' }
+            { urls: [ "stun:jb-turn1.xirsys.com" ] },
+            {
+                username: "ydzCFyiUOl504sLLeswqK7d8MLZwCHOLFDOTJQg2nKg6x5madjZEkJYzy0n72UjQAAAAAGilmwBmcmFuY2lz",
+                credential: "776888d6-7dab-11f0-89de-0242ac120004",
+                urls: [
+                    "turn:jb-turn1.xirsys.com:80?transport=udp",
+                    "turn:jb-turn1.xirsys.com:3478?transport=udp",
+                    "turn:jb-turn1.xirsys.com:80?transport=tcp",
+                    "turn:jb-turn1.xirsys.com:3478?transport=tcp",
+                    "turns:jb-turn1.xirsys.com:443?transport=tcp",
+                    "turns:jb-turn1.xirsys.com:5349?transport=tcp"
+                ]
+            }
         ];
+        log('Using hardcoded Xirsys ICE servers as fallback','success');
     }
 }
 
@@ -144,7 +155,6 @@ async function initApp() {
     document.querySelector('.username_holder').value = userId;
 
     await fetchIceServers();
-
     startLocalStream();
     connectSignaling();
 }
@@ -174,11 +184,13 @@ function connectSignaling() {
 
     socket.on('signal', async ({ from, data }) => {
         if(!peerConnections[from]) initPeerConnection(from, false);
-        await peerConnections[from].setRemoteDescription(new RTCSessionDescription(data.sdp));
-        if(data.sdp && data.sdp.type === 'offer'){
-            const answer = await peerConnections[from].createAnswer();
-            await peerConnections[from].setLocalDescription(answer);
-            socket.emit('signal',{ from:userId, to:from, data:{ sdp:peerConnections[from].localDescription }});
+        if(data.sdp){
+            await peerConnections[from].setRemoteDescription(new RTCSessionDescription(data.sdp));
+            if(data.sdp.type === 'offer'){
+                const answer = await peerConnections[from].createAnswer();
+                await peerConnections[from].setLocalDescription(answer);
+                socket.emit('signal',{ from:userId, to:from, data:{ sdp:peerConnections[from].localDescription }});
+            }
         } else if(data.candidate){
             await peerConnections[from].addIceCandidate(new RTCIceCandidate(data.candidate));
         }
@@ -212,46 +224,4 @@ function initPeerConnection(remoteUserId, isInitiator=true){
 
     pc.onicecandidate = e => {
         if(e.candidate){
-            socket.emit('signal',{ from:userId, to:remoteUserId, data:{ candidate:e.candidate }});
-        }
-    };
-
-    pc.ontrack = e => {
-        let remoteVideo = document.getElementById(remoteUserId);
-        if(!remoteVideo){
-            const container = document.getElementById('divUsers');
-            const userbox = document.createElement('div');
-            userbox.className = 'userbox';
-            userbox.id = remoteUserId;
-            const nameLabel = document.createElement('h2');
-            nameLabel.textContent = remoteUserId;
-            const video = document.createElement('video');
-            video.autoplay = true;
-            video.srcObject = e.streams[0];
-            userbox.appendChild(nameLabel);
-            userbox.appendChild(video);
-            container.appendChild(userbox);
-        }
-    };
-
-    if(isInitiator){
-        pc.createOffer().then(offer => {
-            pc.setLocalDescription(offer);
-            socket.emit('signal',{ from:userId, to:remoteUserId, data:{ sdp: offer }});
-        });
-    }
-}
-
-// Chat send
-document.getElementById('btnsend').addEventListener('click', () => {
-    const msg = document.getElementById('msgbox').value.trim();
-    if(!msg) return;
-    socket.emit('sendMessage',{ meetingID: meetingId, userID: userId, msg });
-    document.getElementById('msgbox').value = '';
-});
-
-// Init app
-initApp();
-</script>
-</body>
-</html>
+            socket.emit('signal',{
