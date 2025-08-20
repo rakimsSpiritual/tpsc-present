@@ -8,17 +8,17 @@
     <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.6.0/dist/css/bootstrap.min.css">
     <style>
-        /* --- Existing CSS preserved --- */
         * { box-sizing: border-box; }
         body { background-color: #f5f5f5; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; height: 100vh; overflow: hidden; }
         .home-wrap { height: 100vh; }
         .g-top { height: 80vh; position: relative; }
         .top-remote-video-show-wrap { height: 100%; display: flex; }
-        .call-wrap { height: 100%; border-radius: 8px; overflow: hidden; }
-        .video-wrap { height: 100%; padding: 10px; display: flex; flex-wrap: wrap; }
-        .userbox { flex: 1 1 300px; margin: 10px; background: #000; border-radius: 8px; overflow: hidden; position: relative; min-height: 200px; }
+        .call-wrap { height: 100%; border-radius: 8px; overflow: hidden; display: flex; flex-direction: column; }
+        .video-wrap { display: flex; flex-wrap: wrap; padding: 10px; overflow-y: auto; transition: all 0.3s; flex: 1; }
+        .userbox { flex: 1 1 200px; margin: 10px; background: #000; border-radius: 8px; overflow: hidden; position: relative; min-height: 200px; transition: all 0.3s; }
         .userbox video { width: 100%; height: 100%; object-fit: cover; }
-        .userbox h2 { position: absolute; top: 10px; left: 10px; background: rgba(0,0,0,0.6); padding: 5px 10px; border-radius: 5px; color: white; z-index: 10; font-size: 14px; }
+        .userbox h2 { position: absolute; top: 10px; left: 10px; background: rgba(0,0,0,0.6); padding: 5px 10px; border-radius: 5px; color: white; z-index: 10; font-size: 14px; cursor: pointer; }
+        .pinned { flex: 1 1 100%; min-height: 400px; margin-bottom: 10px; z-index: 10; }
         .g-right-details-wrap { border-left: 1px solid #ddd; height: 100%; display: flex; flex-direction: column; background: #f9f9f9; color: #555; }
         .g-bottom { height: 10vh; padding: 0 20px; display: flex; justify-content: space-between; align-items: center; background: #f0f0f0; }
         .action-icon-style { width: 50px; height: 50px; border-radius: 50%; background: #eaebec; display: flex; justify-content: center; align-items: center; transition: all 0.3s; cursor: pointer; }
@@ -48,7 +48,6 @@
                 </div>
             </div>
             <div class="g-right-details-wrap" style="flex-basis: 25%;">
-                <!-- Participant & Chat Panels -->
                 <div class="meeting-heading-wrap d-flex justify-content-between align-items-center pr-3 pl-3" style="height: 10vh;">
                     <div class="meeting-heading font-weight-bold cursor-pointer">Meeting Details</div>
                     <div class="meeting-heading-cross cursor-pointer"><span class="material-icons">clear</span></div>
@@ -85,6 +84,8 @@
             <div class="action-icon-style display-center mx-2 cursor-pointer" id="btnMuteUnmute"><span class="material-icons">mic</span></div>
             <div class="action-icon-style display-center mx-2 cursor-pointer end-call-wrap" id="btnEndCall"><span class="material-icons text-white">call_end</span></div>
             <div class="action-icon-style display-center mx-2 cursor-pointer" id="btnStartStopCam"><span class="material-icons">videocam</span></div>
+            <div class="action-icon-style display-center mx-2 cursor-pointer" id="btnSwitchCam"><span class="material-icons">switch_camera</span></div>
+            <div class="action-icon-style display-center mx-2 cursor-pointer" id="btnMuteAll"><span class="material-icons">volume_off</span></div>
         </div>
     </div>
     <input type="hidden" class="username_holder">
@@ -99,6 +100,9 @@ let socket = null;
 let meetingId = null;
 let userId = null;
 let configuration = { iceServers: [] };
+let currentCamera = 0;
+let videoDevices = [];
+let pinnedUserId = null;
 
 // Logging
 function log(msg, type='info') {
@@ -111,35 +115,15 @@ function log(msg, type='info') {
     console.log(msg);
 }
 
-// Fetch TURN/STUN servers dynamically with Xirsys fallback
+// Fetch ICE Servers
 async function fetchIceServers() {
     try {
         const res = await fetch('/turn-credentials');
         const data = await res.json();
-        if(data.iceServers && data.iceServers.length > 0){
-            configuration.iceServers = data.iceServers;
-            log('Using dynamic ICE servers','success');
-        } else {
-            throw new Error('No ICE servers from API');
-        }
+        configuration.iceServers = data.iceServers || [];
+        log('ICE servers loaded','success');
     } catch(err) {
-        log('Failed to fetch ICE servers, using fallback: ' + err.message,'error');
-        configuration.iceServers = [
-            { urls: [ "stun:jb-turn1.xirsys.com" ] },
-            {
-                username: "ydzCFyiUOl504sLLeswqK7d8MLZwCHOLFDOTJQg2nKg6x5madjZEkJYzy0n72UjQAAAAAGilmwBmcmFuY2lz",
-                credential: "776888d6-7dab-11f0-89de-0242ac120004",
-                urls: [
-                    "turn:jb-turn1.xirsys.com:80?transport=udp",
-                    "turn:jb-turn1.xirsys.com:3478?transport=udp",
-                    "turn:jb-turn1.xirsys.com:80?transport=tcp",
-                    "turn:jb-turn1.xirsys.com:3478?transport=tcp",
-                    "turns:jb-turn1.xirsys.com:443?transport=tcp",
-                    "turns:jb-turn1.xirsys.com:5349?transport=tcp"
-                ]
-            }
-        ];
-        log('Using hardcoded Xirsys ICE servers as fallback','success');
+        log('Failed to fetch ICE servers: '+err.message,'error');
     }
 }
 
@@ -153,21 +137,19 @@ async function initApp() {
         return;
     }
     document.querySelector('.username_holder').value = userId;
-
     await fetchIceServers();
-    startLocalStream();
+    await startLocalStream();
     connectSignaling();
 }
 
 // Local media
 async function startLocalStream() {
-    try {
-        localStream = await navigator.mediaDevices.getUserMedia({ audio:true, video:true });
-        document.getElementById('localVideoCtr').srcObject = localStream;
-        log('Local media started','success');
-    } catch(err){
-        log('Failed to get local media: ' + err.message,'error');
-    }
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    videoDevices = devices.filter(d => d.kind==='videoinput');
+    const constraints = { audio:true, video:{ deviceId: videoDevices[currentCamera]?.deviceId || undefined } };
+    localStream = await navigator.mediaDevices.getUserMedia(constraints);
+    document.getElementById('localVideoCtr').srcObject = localStream;
+    log('Local stream started','success');
 }
 
 // Socket signaling
@@ -186,7 +168,7 @@ function connectSignaling() {
         if(!peerConnections[from]) initPeerConnection(from, false);
         if(data.sdp){
             await peerConnections[from].setRemoteDescription(new RTCSessionDescription(data.sdp));
-            if(data.sdp.type === 'offer'){
+            if(data.sdp.type==='offer'){
                 const answer = await peerConnections[from].createAnswer();
                 await peerConnections[from].setLocalDescription(answer);
                 socket.emit('signal',{ from:userId, to:from, data:{ sdp:peerConnections[from].localDescription }});
@@ -203,6 +185,7 @@ function connectSignaling() {
         }
         const elem = document.getElementById(userID);
         if(elem) elem.remove();
+        if(pinnedUserId===userID) pinnedUserId=null;
         log(`${userID} left the meeting`);
     });
 
@@ -219,13 +202,10 @@ function connectSignaling() {
 function initPeerConnection(remoteUserId, isInitiator=true){
     const pc = new RTCPeerConnection(configuration);
     peerConnections[remoteUserId] = pc;
-
     localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
 
     pc.onicecandidate = e => {
-        if(e.candidate){
-            socket.emit('signal',{ from:userId, to:remoteUserId, data:{ candidate:e.candidate }});
-        }
+        if(e.candidate) socket.emit('signal',{ from:userId, to:remoteUserId, data:{ candidate:e.candidate }});
     };
 
     pc.ontrack = e => {
@@ -237,6 +217,7 @@ function initPeerConnection(remoteUserId, isInitiator=true){
             userbox.id = remoteUserId;
             const nameLabel = document.createElement('h2');
             nameLabel.textContent = remoteUserId;
+            nameLabel.onclick = () => pinVideo(remoteUserId);
             const video = document.createElement('video');
             video.autoplay = true;
             video.srcObject = e.streams[0];
@@ -261,6 +242,45 @@ document.getElementById('btnsend').addEventListener('click', () => {
     socket.emit('sendMessage',{ meetingID: meetingId, userID: userId, msg });
     document.getElementById('msgbox').value = '';
 });
+
+// --- Advanced Controls ---
+document.getElementById('btnMuteUnmute').addEventListener('click', () => {
+    localStream.getAudioTracks().forEach(t => t.enabled = !t.enabled);
+});
+document.getElementById('btnStartStopCam').addEventListener('click', () => {
+    localStream.getVideoTracks().forEach(t => t.enabled = !t.enabled);
+});
+document.getElementById('btnSwitchCam').addEventListener('click', async () => {
+    currentCamera = (currentCamera + 1) % videoDevices.length;
+    const newStream = await navigator.mediaDevices.getUserMedia({ audio:true, video:{ deviceId: videoDevices[currentCamera].deviceId } });
+    const videoTrack = newStream.getVideoTracks()[0];
+    Object.values(peerConnections).forEach(pc=>{
+        const sender = pc.getSenders().find(s=>s.track.kind==='video');
+        if(sender) sender.replaceTrack(videoTrack);
+    });
+    localStream.getVideoTracks()[0].stop();
+    localStream.removeTrack(localStream.getVideoTracks()[0]);
+    localStream.addTrack(videoTrack);
+    document.getElementById('localVideoCtr').srcObject = localStream;
+});
+document.getElementById('btnMuteAll').addEventListener('click', () => {
+    Object.values(peerConnections).forEach(pc => pc.getReceivers().forEach(r => { if(r.track.kind==='audio') r.track.enabled=false; }));
+    log('Muted all participants');
+});
+
+// --- Pin / Spotlight video ---
+function pinVideo(userId){
+    const container = document.getElementById('divUsers');
+    const allUsers = Array.from(container.children);
+    allUsers.forEach(u => u.classList.remove('pinned'));
+    const pinned = document.getElementById(userId);
+    if(pinned){
+        pinned.classList.add('pinned');
+        pinnedUserId = userId;
+        container.prepend(pinned);
+        log(`Pinned video: ${userId}`);
+    }
+}
 
 // Init app
 initApp();
