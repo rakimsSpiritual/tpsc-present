@@ -1,4 +1,3 @@
-// server.js
 const express = require('express');
 const fs = require('fs');
 const https = require('https');
@@ -109,22 +108,26 @@ app.get('/turn-credentials', async (req,res) => {
     if(data.v && data.v.iceServers){
       res.json({ iceServers: data.v.iceServers });
     } else {
-      // fallback if Xirsys fails
-      res.json({
-        iceServers: [
-          { urls: 'stun:stun.l.google.com:19302' },
-          { urls: 'stun:stun1.l.google.com:19302' },
-          { urls: 'stun:stun2.l.google.com:19302' }
-        ]
-      });
+      throw new Error('No ICE servers from API');
     }
   } catch(err){
     console.error('Failed to fetch ICE servers:', err);
+    // Fallback: use hardcoded Xirsys servers
     res.json({
       iceServers: [
-        { urls: 'stun:stun.l.google.com:19302' },
-        { urls: 'stun:stun1.l.google.com:19302' },
-        { urls: 'stun:stun2.l.google.com:19302' }
+        { urls: [ "stun:jb-turn1.xirsys.com" ] },
+        {
+          username: "ydzCFyiUOl504sLLeswqK7d8MLZwCHOLFDOTJQg2nKg6x5madjZEkJYzy0n72UjQAAAAAGilmwBmcmFuY2lz",
+          credential: "776888d6-7dab-11f0-89de-0242ac120004",
+          urls: [
+            "turn:jb-turn1.xirsys.com:80?transport=udp",
+            "turn:jb-turn1.xirsys.com:3478?transport=udp",
+            "turn:jb-turn1.xirsys.com:80?transport=tcp",
+            "turn:jb-turn1.xirsys.com:3478?transport=tcp",
+            "turns:jb-turn1.xirsys.com:443?transport=tcp",
+            "turns:jb-turn1.xirsys.com:5349?transport=tcp"
+          ]
+        }
       ]
     });
   }
