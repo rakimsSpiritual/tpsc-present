@@ -1,4 +1,4 @@
- var WrtcHelper = (function () {
+var WrtcHelper = (function () {
   const iceConfiguration = {
     iceServers: [
       {
@@ -16,24 +16,7 @@
       {
         urls: "stun:stun4.l.google.com:19302",
       },
-      // ADDED TURN SERVERS for reliability
-      {
-        urls: "turn:openrelay.metered.ca:80",
-        username: "openrelayproject",
-        credential: "openrelayproject"
-      },
-      {
-        urls: "turn:openrelay.metered.ca:443",
-        username: "openrelayproject",
-        credential: "openrelayproject"
-      },
-      {
-        urls: "turn:openrelay.metered.ca:443?transport=tcp",
-        username: "openrelayproject",
-        credential: "openrelayproject"
-      }
     ],
-    iceTransportPolicy: 'all' // Added for better reliability
   };
 
   var _audioTrack;
@@ -92,7 +75,7 @@
       }
       _isAudioMute = !_isAudioMute;
 
-      console.log("Audio track state:", _audioTrack.enabled ? "unmuted" : "muted");
+      console.log(_audioTrack);
     });
     $("#btnStartStopCam").on("click", async function () {
       if (_videoState == VideoStates.Camera) {
@@ -132,30 +115,21 @@
       if (_newVideoState == VideoStates.Camera) {
         vstream = await navigator.mediaDevices.getUserMedia({
           video: {
-            width: { ideal: 1280 },
-            height: { ideal: 720 },
-            frameRate: { ideal: 30 }
+            width: 1920,
+            height: 1080,
           },
           audio: false,
-        }).catch(error => {
-          console.error("Camera access error:", error);
-          throw error;
         });
       } else if (_newVideoState == VideoStates.ScreenShare) {
         vstream = await navigator.mediaDevices.getDisplayMedia({
           video: {
-            width: { ideal: 1920 },
-            height: { ideal: 1080 },
-            frameRate: { ideal: 30 }
+            width: 1920,
+            height: 1080,
           },
           audio: false,
-        }).catch(error => {
-          console.error("Screen share error:", error);
-          throw error;
         });
 
         vstream.oninactive = (e) => {
-          console.log("Screen share ended");
           ClearCurrentVideoCamStream(_rtpVideoSenders);
           $("#btnStartStopScreenshare").html(
             '<div class="present-now-wrap d-flex justify-content-center flex-column align-items-center  mr-5 cursor-pointer" id="btnStartStopScreenshare" style="height:10vh;"><div class="present-now-icon"><span class="material-icons">present_to_all</span></div><div>Present Now</div></div>'
@@ -186,23 +160,12 @@
 
         if (_videoCamSSTrack) {
           _localVideoPlayer.srcObject = new MediaStream([_videoCamSSTrack]);
-          _localVideoPlayer.play().catch(e => console.error("Local video play error:", e));
-
-          // Add track event handlers
-          _videoCamSSTrack.onended = () => {
-            console.log("Local video track ended");
-            ClearCurrentVideoCamStream(_rtpVideoSenders);
-          };
-          
-          _videoCamSSTrack.onmute = () => console.log("Local video track muted");
-          _videoCamSSTrack.onunmute = () => console.log("Local video track unmuted");
 
           AddUpdateAudioVideoSenders(_videoCamSSTrack, _rtpVideoSenders);
         }
       }
     } catch (e) {
-      console.error("Video management error:", e);
-      alert("Failed to access camera/screen: " + e.message);
+      console.log(e);
       return;
     }
   }
@@ -220,12 +183,8 @@
   async function RemoveAudioVideoSenders(rtpSenders) {
     for (var con_id in peers_con_ids) {
       if (rtpSenders[con_id] && IsConnectionAvailable(peers_conns[con_id])) {
-        try {
-          peers_conns[con_id].removeTrack(rtpSenders[con_id]);
-          rtpSenders[con_id] = null;
-        } catch (e) {
-          console.error("Error removing track:", e);
-        }
+        peers_conns[con_id].removeTrack(rtpSenders[con_id]);
+        rtpSenders[con_id] = null;
       }
     }
   }
@@ -233,15 +192,10 @@
   async function AddUpdateAudioVideoSenders(track, rtpSenders) {
     for (var con_id in peers_con_ids) {
       if (IsConnectionAvailable(peers_conns[con_id])) {
-        try {
-          if (rtpSenders[con_id] && rtpSenders[con_id].track) {
-            await rtpSenders[con_id].replaceTrack(track);
-          } else {
-            rtpSenders[con_id] = peers_conns[con_id].addTrack(track);
-          }
-          console.log(`Track ${track.kind} added/updated for connection ${con_id}`);
-        } catch (e) {
-          console.error(`Error adding/updating track for ${con_id}:`, e);
+        if (rtpSenders[con_id] && rtpSenders[con_id].track) {
+          rtpSenders[con_id].replaceTrack(track);
+        } else {
+          rtpSenders[con_id] = peers_conns[con_id].addTrack(track);
         }
       }
     }
@@ -251,46 +205,26 @@
     try {
       var astream = await navigator.mediaDevices.getUserMedia({
         video: false,
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true
-        },
-      }).catch(error => {
-        console.error("Microphone access error:", error);
-        throw error;
+        audio: true,
       });
-
-      if (!astream.getAudioTracks().length) {
-        throw new Error("No audio tracks available");
-      }
-
       _audioTrack = astream.getAudioTracks()[0];
 
       _audioTrack.onmute = function (e) {
-        console.log("Audio muted", e);
+        console.log(e);
       };
       _audioTrack.onunmute = function (e) {
-        console.log("Audio unmuted", e);
-      };
-      _audioTrack.onended = function () {
-        console.log("Audio track ended");
-        _audioTrack = null;
+        console.log(e);
       };
 
       _audioTrack.enabled = false;
-      console.log("Audio track acquired successfully");
     } catch (e) {
-      console.error("Audio acquisition failed:", e);
-      alert("Microphone access is required. Please check permissions and try again.");
+      console.log(e);
       return;
     }
   }
 
   async function createConnection(connid) {
-    console.log(`Creating connection for: ${connid}`);
     var connection = new RTCPeerConnection(iceConfiguration);
-    
     connection.onicecandidate = function (event) {
       console.log("onicecandidate", event.candidate);
       if (event.candidate) {
@@ -302,41 +236,30 @@
         );
       }
     };
-    
     connection.onicecandidateerror = function (event) {
-      console.error("onicecandidateerror", event);
+      console.log("onicecandidateerror", event);
     };
-    
     connection.onicegatheringstatechange = function (event) {
-      console.log("onicegatheringstatechange", connection.iceGatheringState);
+      console.log("onicegatheringstatechange", event);
     };
-    
     connection.onnegotiationneeded = async function (event) {
       console.log("onnegotiationneeded", event);
       await _createOffer(connid);
     };
-    
     connection.onconnectionstatechange = function (event) {
-      const state = event.currentTarget.connectionState;
-      console.log(`onconnectionstatechange for ${connid}:`, state);
-      
-      if (state === "connected") {
-        console.log(`Connected to ${connid}`);
-      } else if (state === "disconnected" || state === "failed") {
-        console.log(`Connection ${connid} ${state}, attempting reconnection...`);
-        // Attempt reconnection after delay
-        setTimeout(() => {
-          if (peers_conns[connid] && peers_conns[connid].connectionState === "disconnected") {
-            _createOffer(connid);
-          }
-        }, 2000);
+      console.log(
+        "onconnectionstatechange",
+        event.currentTarget.connectionState
+      );
+      if (event.currentTarget.connectionState === "connected") {
+        console.log("connected");
+      }
+      if (event.currentTarget.connectionState === "disconnected") {
+        console.log("disconnected");
       }
     };
-    
     // New remote media stream was added
     connection.ontrack = function (event) {
-      console.log(`Track received from ${connid}:`, event.track.kind);
-      
       if (!_remoteVideoStreams[connid]) {
         _remoteVideoStreams[connid] = new MediaStream();
       }
@@ -351,43 +274,19 @@
         _remoteVideoStreams[connid].addTrack(event.track);
 
         var _remoteVideoPlayer = document.getElementById("v_" + connid);
-        if (_remoteVideoPlayer) {
-          _remoteVideoPlayer.srcObject = null;
-          _remoteVideoPlayer.srcObject = _remoteVideoStreams[connid];
-          _remoteVideoPlayer.load();
-          _remoteVideoPlayer.play().catch(e => console.error("Remote video play error:", e));
-        }
-
-        // Add track event handlers
-        event.track.onended = () => {
-          console.log(`Remote video track ended from ${connid}`);
-          if (_remoteVideoPlayer) _remoteVideoPlayer.srcObject = null;
-        };
-        event.track.onmute = () => console.log(`Remote video muted from ${connid}`);
-        event.track.onunmute = () => console.log(`Remote video unmuted from ${connid}`);
-
+        _remoteVideoPlayer.srcObject = null;
+        _remoteVideoPlayer.srcObject = _remoteVideoStreams[connid];
+        _remoteVideoPlayer.load();
       } else if (event.track.kind == "audio") {
         var _remoteAudioPlayer = document.getElementById("a_" + connid);
         _remoteAudioStreams[connid]
-          .getAudioTracks()
+          .getVideoTracks()
           .forEach((t) => _remoteAudioStreams[connid].removeTrack(t));
         _remoteAudioStreams[connid].addTrack(event.track);
-        
-        if (_remoteAudioPlayer) {
-          _remoteAudioPlayer.srcObject = null;
-          _remoteAudioPlayer.srcObject = _remoteAudioStreams[connid];
-          _remoteAudioPlayer.load();
-        }
-
-        // Add track event handlers
-        event.track.onended = () => console.log(`Remote audio track ended from ${connid}`);
-        event.track.onmute = () => console.log(`Remote audio muted from ${connid}`);
-        event.track.onunmute = () => console.log(`Remote audio unmuted from ${connid}`);
+        _remoteAudioPlayer.srcObject = null;
+        _remoteAudioPlayer.srcObject = _remoteAudioStreams[connid];
+        _remoteAudioPlayer.load();
       }
-    };
-
-    connection.onsignalingstatechange = function() {
-      console.log(`Signaling state for ${connid}:`, connection.signalingState);
     };
 
     peers_con_ids[connid] = connid;
@@ -402,149 +301,97 @@
       }
     }
 
-    if (_audioTrack) {
-      AddUpdateAudioVideoSenders(_audioTrack, _rtpAudioSenders);
-    }
-
     return connection;
   }
 
   async function _createOffer(connid) {
-    if (!peers_conns[connid]) {
-      console.error(`No connection found for ${connid} when creating offer`);
-      return;
-    }
-
     var connection = peers_conns[connid];
     console.log("connection.signalingState:" + connection.signalingState);
-    
-    try {
-      var offer = await connection.createOffer({
-        offerToReceiveAudio: true,
-        offerToReceiveVideo: true
-      });
-      await connection.setLocalDescription(offer);
-      
-      //Send offer to Server
+    var offer = await connection.createOffer();
+    await connection.setLocalDescription(offer);
+    //Send offer to Server
+    _serverFn(
+      JSON.stringify({
+        offer: connection.localDescription,
+      }),
+      connid
+    );
+  }
+  async function exchangeSDP(message, from_connid) {
+    console.log("messag", message);
+    message = JSON.parse(message);
+
+    if (message.answer) {
+      console.log("answer", message.answer);
+      await peers_conns[from_connid].setRemoteDescription(
+        new RTCSessionDescription(message.answer)
+      );
+      console.log("connection", peers_conns[from_connid]);
+    } else if (message.offer) {
+      console.log("offer", message.offer);
+
+      if (!peers_conns[from_connid]) {
+        await createConnection(from_connid);
+      }
+
+      await peers_conns[from_connid].setRemoteDescription(
+        new RTCSessionDescription(message.offer)
+      );
+      var answer = await peers_conns[from_connid].createAnswer();
+      await peers_conns[from_connid].setLocalDescription(answer);
       _serverFn(
         JSON.stringify({
-          offer: connection.localDescription,
+          answer: answer,
         }),
-        connid
+        from_connid,
+        _my_connid
       );
-    } catch (e) {
-      console.error("Error creating offer:", e);
-    }
-  }
-
-  async function exchangeSDP(message, from_connid) {
-    console.log("Received SDP message from:", from_connid);
-    try {
-      message = JSON.parse(message);
-
-      if (message.answer) {
-        console.log("Processing answer from:", from_connid);
-        if (!peers_conns[from_connid]) {
-          console.error("No connection found for answer");
-          return;
-        }
-        
-        await peers_conns[from_connid].setRemoteDescription(
-          new RTCSessionDescription(message.answer)
-        );
-        console.log("Answer processed successfully");
-
-      } else if (message.offer) {
-        console.log("Processing offer from:", from_connid);
-
-        if (!peers_conns[from_connid]) {
-          await createConnection(from_connid);
-        }
-
-        await peers_conns[from_connid].setRemoteDescription(
-          new RTCSessionDescription(message.offer)
-        );
-        var answer = await peers_conns[from_connid].createAnswer({
-          offerToReceiveAudio: true,
-          offerToReceiveVideo: true
-        });
-        await peers_conns[from_connid].setLocalDescription(answer);
-        
-        _serverFn(
-          JSON.stringify({
-            answer: answer,
-          }),
-          from_connid,
-          _my_connid
-        );
-        console.log("Answer sent successfully");
-
-      } else if (message.iceCandidate) {
-        console.log("Processing ICE candidate from:", from_connid);
-        if (!peers_conns[from_connid]) {
-          await createConnection(from_connid);
-        }
-
-        try {
-          await peers_conns[from_connid].addIceCandidate(message.iceCandidate);
-          console.log("ICE candidate added successfully");
-        } catch (e) {
-          console.error("Error adding ICE candidate:", e);
-        }
+    } else if (message.iceCandidate) {
+      console.log("iceCandidate", message.iceCandidate);
+      if (!peers_conns[from_connid]) {
+        await createConnection(from_connid);
       }
-    } catch (e) {
-      console.error("Error processing SDP message:", e);
+
+      try {
+        await peers_conns[from_connid].addIceCandidate(message.iceCandidate);
+      } catch (e) {
+        console.log(e);
+      }
     }
   }
 
   function IsConnectionAvailable(connection) {
-    if (!connection) {
-      console.log("Connection is null");
-      return false;
-    }
-    
-    const state = connection.connectionState;
-    console.log(`Connection state check: ${state}`);
-    
-    return state === "new" || state === "connecting" || state === "connected";
+    if (
+      connection &&
+      (connection.connectionState == "new" ||
+        connection.connectionState == "connecting" ||
+        connection.connectionState == "connected")
+    ) {
+      return true;
+    } else return false;
   }
 
   function closeConnection(connid) {
-    console.log(`Closing connection: ${connid}`);
     peers_con_ids[connid] = null;
 
     if (peers_conns[connid]) {
-      try {
-        peers_conns[connid].close();
-      } catch (e) {
-        console.error("Error closing connection:", e);
-      }
+      peers_conns[connid].close();
       peers_conns[connid] = null;
     }
-    
     if (_remoteAudioStreams[connid]) {
       _remoteAudioStreams[connid].getTracks().forEach((t) => {
-        try {
-          if (t.stop) t.stop();
-        } catch (e) {
-          console.error("Error stopping audio track:", e);
-        }
+        if (t.stop) t.stop();
       });
       _remoteAudioStreams[connid] = null;
     }
 
     if (_remoteVideoStreams[connid]) {
       _remoteVideoStreams[connid].getTracks().forEach((t) => {
-        try {
-          if (t.stop) t.stop();
-        } catch (e) {
-          console.error("Error stopping video track:", e);
-        }
+        if (t.stop) t.stop();
       });
       _remoteVideoStreams[connid] = null;
     }
   }
-  
   return {
     init: async function (serverFn, my_connid) {
       await _init(serverFn, my_connid);
@@ -558,9 +405,6 @@
     closeExistingConnection: function (connid) {
       closeConnection(connid);
     },
-    getConnectionState: function(connid) {
-      return peers_conns[connid] ? peers_conns[connid].connectionState : 'none';
-    }
   };
 })();
 
@@ -585,11 +429,6 @@ var MyApp = (function () {
     $("#me h2").text(user_id + "(Me)");
     document.title = user_id;
 
-    // Check if we're on HTTPS (required for media devices)
-    if (window.location.protocol !== 'https:' && window.location.hostname !== 'localhost') {
-      alert("Warning: This app requires HTTPS for media devices to work properly. Some features may not work.");
-    }
-
     // Initialize mediasoup device if available
     try {
       if (typeof mediasoupClient !== 'undefined') {
@@ -608,34 +447,7 @@ var MyApp = (function () {
   }
 
   async function SignalServerEventBinding() {
-    console.log("Connecting to server:", socket_url);
-    socket = io.connect(socket_url, {
-      transports: ['websocket', 'polling'],
-      reconnection: true,
-      reconnectionAttempts: 5,
-      reconnectionDelay: 1000
-    });
-
-    socket.on('connect', () => {
-      console.log("Socket connected successfully");
-      if (socket.connected) {
-        if (user_id != "" && meeting_id != "") {
-          socket.emit("userconnect", {
-            dsiplayName: user_id,
-            meetingid: meeting_id,
-          });
-          console.log("Sent userconnect event");
-        }
-      }
-    });
-
-    socket.on('connect_error', (error) => {
-      console.error("Socket connection error:", error);
-    });
-
-    socket.on('disconnect', (reason) => {
-      console.log("Socket disconnected:", reason);
-    });
+    socket = io.connect(socket_url);
 
     // Request router RTP capabilities for mediasoup
     if (useMediasoup) {
@@ -710,14 +522,12 @@ var MyApp = (function () {
     });
 
     socket.on("exchangeSDP", async function (data) {
-      console.log("Received SDP exchange request");
       if (!useMediasoup) {
         await WrtcHelper.ExecuteClientFn(data.message, data.from_connid);
       }
     });
 
     socket.on("informAboutNewConnection", function (data) {
-      console.log("New connection from:", data.other_user_id);
       if (!useMediasoup) {
         AddNewUser(data.other_user_id, data.connId, data.userNumber);
         WrtcHelper.createNewConnection(data.connId);
@@ -725,7 +535,6 @@ var MyApp = (function () {
     });
 
     socket.on("informAboutConnectionEnd", function (data) {
-      console.log("Connection ended:", data.connId);
       if (!useMediasoup) {
         $("#" + data.connId).remove();
         $(".participant-count").text(data.userCoun);
@@ -765,8 +574,18 @@ var MyApp = (function () {
         "</a></div></div><br/>";
     });
 
+    socket.on("connect", () => {
+      if (socket.connected) {
+        if (user_id != "" && meeting_id != "") {
+          socket.emit("userconnect", {
+            dsiplayName: user_id,
+            meetingid: meeting_id,
+          });
+        }
+      }
+    });
+
     socket.on("userconnected", function (other_users) {
-      console.log("Users connected:", other_users);
       if (useMediasoup) {
         // For mediasoup, we handle connections differently
         return;
@@ -889,19 +708,8 @@ var MyApp = (function () {
     try {
       // Get user media
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
-          frameRate: { ideal: 30 }
-        },
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true
-        }
-      }).catch(error => {
-        console.error('Media access error:', error);
-        throw error;
+        video: true,
+        audio: true
       });
 
       // Produce video
@@ -914,7 +722,6 @@ var MyApp = (function () {
         const localVideo = document.getElementById("localVideoCtr");
         if (localVideo) {
           localVideo.srcObject = new MediaStream([videoTrack]);
-          localVideo.play().catch(e => console.error('Local video play error:', e));
         }
       }
 
@@ -933,14 +740,12 @@ var MyApp = (function () {
                 ? '<span class="material-icons">mic</span>'
                 : '<span class="material-icons">mic_off</span>'
             );
-            console.log('Audio', audioTrack.enabled ? 'unmuted' : 'muted');
           }
         });
       }
 
     } catch (error) {
       console.error('Error starting media production:', error);
-      alert('Failed to access camera/microphone. Please check permissions.');
     }
   }
 
@@ -1026,7 +831,6 @@ var MyApp = (function () {
 
   async function OriginalWebRTCFallback() {
     // Fallback to the original WebRTC implementation
-    console.log("Falling back to standard WebRTC");
     WrtcHelper.init(function(data, to_connid) {
       socket.emit("exchangeSDP", {
         message: data,
@@ -1041,11 +845,8 @@ var MyApp = (function () {
     });
 
     $("#btnsend").on("click", function () {
-      const message = $("#msgbox").val().trim();
-      if (message) {
-        socket.emit("sendMessage", message);
-        $("#msgbox").val("");
-      }
+      socket.emit("sendMessage", $("#msgbox").val());
+      $("#msgbox").val("");
     });
 
     // Add Enter key support for chat
@@ -1059,134 +860,30 @@ var MyApp = (function () {
     $("#divUsers").on("dblclick", "video", function () {
       this.requestFullscreen();
     });
-
-    // Add connection status monitoring
-    setInterval(() => {
-      if (!useMediasoup) {
-        for (const connid in peers_conns) {
-          const state = WrtcHelper.getConnectionState(connid);
-          console.log(`Connection ${connid} state: ${state}`);
-        }
-      }
-    }, 10000); // Check every 10 seconds
   }
 
   function AddNewUser(other_user_id, connId, userNum) {
     var $newDiv = $("#otherTemplate").clone();
-
-                </div>
-            </div>
-          </div>`
-        );
-
-      } else if (kind === 'audio') {
-        const remoteAudio = document.createElement('audio');
-        remoteAudio.id = `remote_audio_${producerId}`;
-        remoteAudio.autoplay = true;
-        remoteAudio.playsInline = true;
-        remoteAudio.srcObject = new MediaStream([track]);
-        document.body.appendChild(remoteAudio);
-      }
-
-      consumer.on('transportclose', () => {
-        console.log('Consumer transport closed');
-        consumer.close();
-        consumers.delete(producerId);
-        $(`#remote_${producerId}`).remove();
-        $(`#participant_${producerId}`).remove();
-      });
-
-      consumer.on('producerclose', () => {
-        console.log('Producer closed');
-        consumer.close();
-        consumers.delete(producerId);
-        $(`#remote_${producerId}`).remove();
-        $(`#participant_${producerId}`).remove();
-      });
-
-    } catch (error) {
-      console.error('Error consuming producer:', error);
-    }
-  }
-
-  async function OriginalWebRTCFallback() {
-    console.log('Falling back to original WebRTC implementation');
-    try {
-      await WrtcHelper.init(function (data, to_connid) {
-        socket.emit("exchangeSDP", { message: data, to_connid });
-      }, user_id);
-
-      EventBinding();
-    } catch (error) {
-      console.error('Error initializing WebRTC fallback:', error);
-    }
-  }
-
-  function EventBinding() {
-    $("#btnsend").on("click", function () {
-      var msgData = $("#msgbox").val();
-      socket.emit("sendMessage", msgData);
-      $("#msgbox").val("");
-    });
-
-    $("#msgbox").on("keypress", function (e) {
-      if (e.which === 13 && !e.shiftKey) {
-        e.preventDefault();
-        $("#btnsend").click();
-      }
-    });
-
-    $("#btnAttachment").on("change", function () {
-      var file = this.files[0];
-      if (!file) return;
-      var formData = new FormData();
-      formData.append("file", file);
-      formData.append("meeting_id", meeting_id);
-      formData.append("username", user_id);
-      $.ajax({
-        url: socket_url + "/upload",
-        type: "POST",
-        data: formData,
-        processData: false,
-        contentType: false,
-        success: function () {
-          console.log("File uploaded successfully");
-        },
-        error: function (err) {
-          console.error("File upload error:", err);
-        },
-      });
-    });
-  }
-
-  function AddNewUser(other_user_id, connId, userNumber) {
-    var newDivId = $("#otherTemplate").clone();
-    newDivId = newDivId.attr("id", connId).addClass("other");
-    newDivId.find("h2").text(other_user_id);
-    newDivId.find("video").attr("id", "v_" + connId);
-    newDivId.find("audio").attr("id", "a_" + connId);
-    newDivId.show();
-    $("#divUsers").append(newDivId);
-
+    $newDiv = $newDiv.attr("id", connId).addClass("other");
+    $newDiv.find("h2").text(other_user_id);
+    $newDiv.find("video").attr("id", "v_" + connId);
+    $newDiv.find("audio").attr("id", "a_" + connId);
+    $newDiv.show();
+    $("#divUsers").append($newDiv);
     $(".in-call-wrap-up").append(
-      `<div class="in-call-wrap d-flex justify-content-between align-items-center mb-3" id="participant_${connId}">
-        <div class="participant-img-name-wrap display-center cursor-pointer">
-          <div class="participant-img">
-            <img src="images/me2.png" alt="" class="border border-secondary" style="height: 40px;width: 40px;border-radius: 50%;">
-          </div>
-          <div class="participant-name ml-2">${other_user_id}</div>
-        </div>
-        <div class="participant-action-wrap display-center">
-          <div class="participant-action-dot display-center mr-2 cursor-pointer">
-            <span class="material-icons">more_vert</span>
-          </div>
-        </div>
-      </div>`
+      '<div class="in-call-wrap d-flex justify-content-between align-items-center mb-3" id="participant_' +
+        connId +
+        '" style=""> <div class="participant-img-name-wrap display-center cursor-pointer"> <div class="participant-img"> <img src="images/me2.png" alt="" class="border border-secondary" style="height: 40px;width: 40px;border-radius: 50%;"> </div> <div class="participant-name ml-2">' +
+        other_user_id +
+        '</div> </div> <div class="participant-action-wrap display-center"> <div class="participant-action-dot display-center mr-2 cursor-pointer"> <span class="material-icons"> more_vert </span> </div> <div class="participant-action-pin display-center cursor-pointer"> <span class="material-icons"> push_pin </span> </div> </div> </div>'
     );
-    $(".participant-count").text(userNumber);
+
+    $(".participant-count").text(userNum);
   }
 
   return {
-    init: init,
+    _init: function (uid, mid) {
+      init(uid, mid);
+    },
   };
 })();
