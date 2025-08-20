@@ -4,6 +4,7 @@ const fs = require('fs');
 const https = require('https');
 const { Server } = require('socket.io');
 const path = require('path');
+const axios = require('axios'); // ✅ added for Xirsys API
 
 const app = express();
 
@@ -48,6 +49,30 @@ app.get('/appHome', (req, res) => res.render('appHome'));
 // Health check endpoint for Render
 app.get('/health', (req, res) => {
   res.status(200).json({ status: 'OK', timestamp: new Date().toISOString() });
+});
+
+/* ✅ TURN/STUN endpoint for clients */
+app.get('/ice-servers', async (req, res) => {
+  try {
+    const response = await axios.put(
+      "https://global.xirsys.net/_turn/myapp", // replace "myapp" with your Xirsys channel
+      {},
+      {
+        headers: {
+          Authorization:
+            "Basic " +
+            Buffer.from(
+              "65a8fdb8-7da3-11f0-98a1-0242ac130003:YOUR_XIRSYS_SECRET"
+            ).toString("base64"),
+        },
+      }
+    );
+
+    res.json(response.data.v.iceServers);
+  } catch (err) {
+    console.error("Xirsys error:", err.message);
+    res.status(500).json({ error: "Failed to fetch ICE servers" });
+  }
 });
 
 // Meetings store
