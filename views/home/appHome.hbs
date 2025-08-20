@@ -8,200 +8,30 @@
     <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.6.0/dist/css/bootstrap.min.css">
     <style>
-        * {
-            box-sizing: border-box;
-        }
-        
-        body {
-            background-color: #f5f5f5;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            height: 100vh;
-            overflow: hidden;
-        }
-        
-        .home-wrap {
-            height: 100vh;
-        }
-        
-        .g-top {
-            height: 80vh;
-            position: relative;
-        }
-        
-        .top-remote-video-show-wrap {
-            height: 100%;
-        }
-        
-        .call-wrap {
-            height: 100%;
-            border-radius: 8px;
-            overflow: hidden;
-        }
-        
-        .video-wrap {
-            height: 100%;
-            padding: 10px;
-        }
-        
-        .userbox {
-            flex: 1 1 300px;
-            margin: 10px;
-            background: #000;
-            border-radius: 8px;
-            overflow: hidden;
-            position: relative;
-            min-height: 200px;
-        }
-        
-        .userbox video {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-        }
-        
-        .userbox h2 {
-            position: absolute;
-            top: 10px;
-            left: 10px;
-            background: rgba(0,0,0,0.6);
-            padding: 5px 10px;
-            border-radius: 5px;
-            color: white;
-            z-index: 10;
-        }
-        
-        .g-right-details-wrap {
-            border-left: 1px solid #ddd;
-            height: 100%;
-            display: flex;
-            flex-direction: column;
-        }
-        
-        .g-bottom {
-            height: 10vh;
-            padding: 0 20px;
-        }
-        
-        .action-icon-style {
-            width: 50px;
-            height: 50px;
-            border-radius: 50%;
-            background: #eaebec;
-            transition: all 0.3s;
-        }
-        
-        .action-icon-style:hover {
-            background: #d5d6d7;
-            transform: scale(1.05);
-        }
-        
-        .end-call-wrap {
-            background: #ff3b30 !important;
-            color: white;
-        }
-        
-        .g-top-left {
-            position: absolute;
-            top: 20px;
-            left: 20px;
-            border-radius: 8px;
-            padding: 10px;
-            z-index: 100;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
-        }
-        
-        .log-container {
-            background: rgba(0, 0, 0, 0.7);
-            color: white;
-            padding: 10px;
-            border-radius: 8px;
-            max-height: 200px;
-            overflow-y: auto;
-            font-family: monospace;
-            font-size: 12px;
-            margin-top: 10px;
-            display: none;
-        }
-        
-        .log-entry {
-            margin-bottom: 5px;
-            padding: 3px;
-            border-left: 3px solid #3498db;
-        }
-        
-        .log-error {
-            border-left-color: #e74c3c;
-        }
-        
-        .log-success {
-            border-left-color: #2ecc71;
-        }
-        
-        .debug-toggle {
-            position: absolute;
-            bottom: 100px;
-            right: 20px;
-            z-index: 100;
-        }
-        
-        /* Responsive adjustments */
-        @media (max-width: 992px) {
-            .top-remote-video-show-wrap {
-                flex-direction: column;
-            }
-            
-            #meetingContainer {
-                flex-basis: 60% !important;
-            }
-            
-            .g-right-details-wrap {
-                flex-basis: 40% !important;
-            }
-        }
-        
-        @media (max-width: 768px) {
-            .g-bottom {
-                padding: 0 10px;
-            }
-            
-            .action-icon-style {
-                width: 40px;
-                height: 40px;
-            }
-            
-            .userbox {
-                flex-basis: 100%;
-            }
-            
-            #meetingContainer {
-                flex-basis: 100% !important;
-            }
-            
-            .g-right-details-wrap {
-                display: none !important;
-            }
-            
-            .mobile-chat-toggle {
-                display: block !important;
-            }
-        }
-        
-        .mobile-chat-toggle {
-            display: none;
-            position: fixed;
-            bottom: 80px;
-            right: 20px;
-            z-index: 100;
-        }
-        
-        .ice-config-box {
-            background: white;
-            color: #333;
-            padding: 15px;
-            border-radius: 8px;
-            margin-top: 15px;
-            font-size: 14px;
-        }
+        * { box-sizing: border-box; }
+        body { background-color: #f5f5f5; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; height: 100vh; overflow: hidden; }
+        .home-wrap { height: 100vh; }
+        .g-top { height: 80vh; position: relative; }
+        .top-remote-video-show-wrap { height: 100%; }
+        .call-wrap { height: 100%; border-radius: 8px; overflow: hidden; }
+        .video-wrap { height: 100%; padding: 10px; }
+        .userbox { flex: 1 1 300px; margin: 10px; background: #000; border-radius: 8px; overflow: hidden; position: relative; min-height: 200px; }
+        .userbox video { width: 100%; height: 100%; object-fit: cover; }
+        .userbox h2 { position: absolute; top: 10px; left: 10px; background: rgba(0,0,0,0.6); padding: 5px 10px; border-radius: 5px; color: white; z-index: 10; }
+        .g-right-details-wrap { border-left: 1px solid #ddd; height: 100%; display: flex; flex-direction: column; }
+        .g-bottom { height: 10vh; padding: 0 20px; }
+        .action-icon-style { width: 50px; height: 50px; border-radius: 50%; background: #eaebec; transition: all 0.3s; }
+        .action-icon-style:hover { background: #d5d6d7; transform: scale(1.05); }
+        .end-call-wrap { background: #ff3b30 !important; color: white; }
+        .g-top-left { position: absolute; top: 20px; left: 20px; border-radius: 8px; padding: 10px; z-index: 100; box-shadow: 0 2px 10px rgba(0,0,0,0.2); }
+        .log-container { background: rgba(0, 0, 0, 0.7); color: white; padding: 10px; border-radius: 8px; max-height: 200px; overflow-y: auto; font-family: monospace; font-size: 12px; margin-top: 10px; display: none; }
+        .log-entry { margin-bottom: 5px; padding: 3px; border-left: 3px solid #3498db; }
+        .log-error { border-left-color: #e74c3c; }
+        .log-success { border-left-color: #2ecc71; }
+        .debug-toggle { position: absolute; bottom: 100px; right: 20px; z-index: 100; }
+        @media (max-width: 992px) { .top-remote-video-show-wrap { flex-direction: column; } #meetingContainer { flex-basis: 60% !important; } .g-right-details-wrap { flex-basis: 40% !important; } }
+        @media (max-width: 768px) { .g-bottom { padding: 0 10px; } .action-icon-style { width: 40px; height: 40px; } .userbox { flex-basis: 100%; } #meetingContainer { flex-basis: 100% !important; } .g-right-details-wrap { display: none !important; } .mobile-chat-toggle { display: block !important; } }
+        .mobile-chat-toggle { display: none; position: fixed; bottom: 80px; right: 20px; z-index: 100; }
     </style>
 </head>
 <body>
@@ -215,31 +45,24 @@
                             <div id="me" class="userbox div-center-column">
                                 <h2 class="display-center" style="font-size: 14px;">You</h2>
                                 <div class="display-center h-100">
-                                    <video autoplay muted id="localVideoCtr" />
+                                    <video autoplay muted id="localVideoCtr"></video>
                                 </div>
                             </div>
-                            <!-- Remote users will be added here dynamically -->
                         </div>
                     </div>
                 </div>
                 <div class="g-right-details-wrap bg-light text-secondary h-100" style="flex-basis: 25%;">
                     <div class="meeting-heading-wrap d-flex justify-content-between align-items-center pr-3 pl-3" style="height: 10vh;">
                         <div class="meeting-heading font-weight-bold cursor-pointer">Meeting Details</div>
-                        <div class="meeting-heading-cross display-center cursor-pointer">
-                            <span class="material-icons">clear</span>
-                        </div>
+                        <div class="meeting-heading-cross display-center cursor-pointer"><span class="material-icons">clear</span></div>
                     </div>
                     <div class="people-chat-wrap d-flex justify-content-between align-items-center border-bottom ml-3 mr-3 pl-3 pr-3" style="height: 10vh;font-size: 14px;">
                         <div class="people-heading display-center cursor-pointer">
-                            <div class="people-heading-icon display-center mr-1">
-                                <span class="material-icons">people</span>
-                            </div>
+                            <div class="people-heading-icon display-center mr-1"><span class="material-icons">people</span></div>
                             <div class="people-heading-text display-center">Participant (<span class="participant-count">1</span>)</div>
                         </div>
                         <div class="chat-heading d-flex justify-content-around align-items-center cursor-pointer">
-                            <div class="chat-heading-icon display-center mr-1">
-                                <span class="material-icons">message</span>
-                            </div>
+                            <div class="chat-heading-icon display-center mr-1"><span class="material-icons">message</span></div>
                             <div class="chat-heading-text">Chat</div>
                         </div>
                     </div>
@@ -247,581 +70,172 @@
                         <div class="chat-show-wrap text-secondary" style="font-size:14px;">
                             <div class="chat-message-show" id="messages"></div>
                             <div class="chat-message-sent d-flex justify-content-between align-items-center" style="margin-bottom: 35px;">
-                                <div class="chat-message-sent-input" style="width: 85%;">
-                                    <input type="text" class="chat-message-sent-input-field w-100" id="msgbox" placeholder="Send a message to everyone" style="border: none; border-bottom: 1px solid teal;">
-                                </div>
-                                <div class="chat-message-sent-action display-center" id="btnsend" style="color: teal;cursor: pointer;">
-                                    <span class="material-icons">send</span>
-                                </div>
+                                <div class="chat-message-sent-input" style="width: 85%;"><input type="text" class="chat-message-sent-input-field w-100" id="msgbox" placeholder="Send a message to everyone" style="border: none; border-bottom: 1px solid teal;"></div>
+                                <div class="chat-message-sent-action display-center" id="btnsend" style="color: teal;cursor: pointer;"><span class="material-icons">send</span></div>
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
-
             <div class="g-top-left bg-light text-secondary d-flex align-items-center justify-content-between pl-2 pr-2">
-                <div class="top-left-participant-wrap pt-2 cursor-pointer">
-                    <div class="top-left-participant-icon"><span class="material-icons">people</span></div>
-                    <div class="top-left-participant-count">1</div>
-                </div>
-                <div class="top-left-chat-wrap pt-2 cursor-pointer ml-2">
-                    <span class="material-icons">message</span>
-                </div>
+                <div class="top-left-participant-wrap pt-2 cursor-pointer"><div class="top-left-participant-icon"><span class="material-icons">people</span></div><div class="top-left-participant-count">1</div></div>
+                <div class="top-left-chat-wrap pt-2 cursor-pointer ml-2"><span class="material-icons">message</span></div>
                 <div class="top-left-time-wrap ml-2">00:00</div>
             </div>
-            
             <button class="btn btn-sm btn-info debug-toggle" id="debugToggle">Debug</button>
             <button class="btn btn-sm btn-warning mobile-chat-toggle" id="mobileChatToggle">Chat</button>
-            
             <div class="log-container" id="logContainer"></div>
         </div>
-
         <div class="g-bottom bg-light m-0 d-flex justify-content-between align-items-center">
             <div class="bottom-left d-flex align-items-center" style="height:10vh;">
-                <div class="display-center cursor-pointer meeting-details-button">
-                    <span class="material-icons mr-1">info</span>
-                    Meeting Details
-                </div>
+                <div class="display-center cursor-pointer meeting-details-button"><span class="material-icons mr-1">info</span>Meeting Details</div>
             </div>
-
             <div class="d-flex justify-content-center align-items-center" style="height:10vh;">
-                <div class="action-icon-style display-center mx-2 cursor-pointer" id="btnMuteUnmute">
-                    <span class="material-icons">mic</span>
-                </div>
-
-                <div class="action-icon-style display-center mx-2 cursor-pointer end-call-wrap" id="btnEndCall">
-                    <span class="material-icons text-white">call_end</span>
-                </div>
-
-                <div class="action-icon-style display-center mx-2 cursor-pointer" id="btnStartStopCam">
-                    <span class="material-icons">videocam</span>
-                </div>
-
-                <div class="display-center mx-2">
-                    <button class="btn btn-danger btn-sm" id="start-recording">Start Recording</button>
-                </div>
-
-                <div class="display-center mx-2 cursor-pointer" id="btnStartStopScreenshare">
-                    <button class="btn btn-primary btn-sm">
-                        <span class="material-icons align-middle">present_to_all</span>
-                        <span class="align-middle">Present</span>
-                    </button>
-                </div>
+                <div class="action-icon-style display-center mx-2 cursor-pointer" id="btnMuteUnmute"><span class="material-icons">mic</span></div>
+                <div class="action-icon-style display-center mx-2 cursor-pointer end-call-wrap" id="btnEndCall"><span class="material-icons text-white">call_end</span></div>
+                <div class="action-icon-style display-center mx-2 cursor-pointer" id="btnStartStopCam"><span class="material-icons">videocam</span></div>
+                <div class="display-center mx-2"><button class="btn btn-danger btn-sm" id="start-recording">Start Recording</button></div>
+                <div class="display-center mx-2 cursor-pointer" id="btnStartStopScreenshare"><button class="btn btn-primary btn-sm"><span class="material-icons align-middle">present_to_all</span> Present</button></div>
             </div>
-
-            <div class="bottom-right d-flex justify-content-center align-items-center mr-3" style="height:10vh;">
-                <div class="option-wrap cursor-pointer display-center">
-                    <div class="option-icon">
-                        <span class="material-icons">more_vert</span>
-                    </div>
-                </div>
-            </div>
+            <div class="bottom-right d-flex justify-content-center align-items-center mr-3" style="height:10vh;"><div class="option-wrap cursor-pointer display-center"><div class="option-icon"><span class="material-icons">more_vert</span></div></div></div>
         </div>
-
         <input type="hidden" class="username_holder">
     </main>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/2.0.4/socket.io.js"></script>
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+
     <script>
-        // WebRTC configuration with multiple STUN and TURN servers
-        const configuration = {
-            iceServers: [
-                { urls: 'stun:stun.l.google.com:19302' },
-                { urls: 'stun:stun1.l.google.com:19302' },
-                { urls: 'stun:stun2.l.google.com:19302' },
-                { urls: 'stun:stun3.l.google.com:19302' },
-                { urls: 'stun:stun4.l.google.com:19302' },
-                {
-                    urls: 'turn:openrelay.metered.ca:80',
-                    username: 'openrelayproject',
-                    credential: 'openrelayproject'
-                },
-                {
-                    urls: 'turn:openrelay.metered.ca:443',
-                    username: 'openrelayproject',
-                    credential: 'openrelayproject'
-                }
-            ],
-            iceTransportPolicy: 'all',
-            bundlePolicy: 'max-bundle',
-            rtcpMuxPolicy: 'require'
-        };
+        let iceServers = [];
 
-        // Media constraints with fallback options
-        const mediaConstraints = {
-            audio: {
-                channelCount: 1,
-                echoCancellation: true,
-                noiseSuppression: true,
-                sampleRate: 44100,
-                sampleSize: 16
-            },
-            video: {
-                width: { ideal: 1280 },
-                height: { ideal: 720 },
-                frameRate: { ideal: 30 }
-            }
-        };
+        // Fetch ICE servers from backend with fallback
+        fetch("/turn-credentials")
+        .then(res => res.json())
+        .then(data => {
+            iceServers = data.iceServers || [];
+            console.log("Loaded ICE servers:", iceServers);
+            initApp();
+        })
+        .catch(err => {
+            console.error("Failed to load ICE servers:", err);
+            iceServers = [
+                { urls: "stun:stun.l.google.com:19302" },
+                { urls: "stun:stun1.l.google.com:19302" },
+                { urls: "stun:stun2.l.google.com:19302" },
+                { urls: "stun:stun3.l.google.com:19302" },
+                { urls: "stun:stun4.l.google.com:19302" }
+            ];
+            initApp();
+        });
 
-        // Global variables
         let localStream = null;
         let peerConnections = {};
         let socket = null;
-        let isCallStarted = false;
         let isMuted = false;
         let isVideoEnabled = true;
         let meetingId = null;
         let userId = null;
 
-        // Debug logging
-        function log(message, type = 'info') {
+        function log(message, type='info') {
             const logContainer = document.getElementById('logContainer');
-            const logEntry = document.createElement('div');
-            logEntry.className = `log-entry ${type === 'error' ? 'log-error' : type === 'success' ? 'log-success' : ''}`;
-            logEntry.textContent = `${new Date().toLocaleTimeString()}: ${message}`;
-            logContainer.appendChild(logEntry);
+            const entry = document.createElement('div');
+            entry.className = `log-entry ${type==='error'?'log-error':type==='success'?'log-success':''}`;
+            entry.textContent = `${new Date().toLocaleTimeString()}: ${message}`;
+            logContainer.appendChild(entry);
             logContainer.scrollTop = logContainer.scrollHeight;
             console.log(message);
         }
 
-        // Initialize the application
         function initApp() {
             const urlParams = new URLSearchParams(window.location.search);
             meetingId = urlParams.get('meetingID');
-            userId = urlParams.get('uid');
-            
-            if (!userId) {
-                userId = prompt('Enter your nick name!');
-            }
-
-            if (!userId || !meetingId) {
-                window.location.href = '/sign';
-                return;
-            }
-            
-            document.getElementById('meetingContainer').style.display = 'block';
+            userId = urlParams.get('uid') || prompt('Enter your nick name!');
+            if (!meetingId || !userId) { window.location.href='/sign'; return; }
             document.querySelector('.username_holder').value = userId;
-            
-            // Initialize WebRTC
-            initWebRTC();
-            
-            // Connect to signaling server
-            connectSignalingServer();
-            
-            // Start the call
-            startCall();
+            initMedia();
+            connectSignaling();
         }
 
-        // Initialize WebRTC
-        function initWebRTC() {
-            log('Initializing WebRTC with desktop compatibility settings');
-        }
-
-        // Connect to signaling server
-        function connectSignalingServer() {
+        async function initMedia() {
             try {
-                // Replace with your actual signaling server URL
-                socket = io('https://your-signaling-server.com');
-                
-                socket.on('connect', () => {
-                    log('Connected to signaling server', 'success');
-                    socket.emit('join-meeting', { meetingId, userId });
-                });
-                
-                socket.on('user-joined', (data) => {
-                    log(`User joined: ${data.userId}`);
-                    createPeerConnection(data.userId);
-                });
-                
-                socket.on('offer', (data) => {
-                    handleOffer(data);
-                });
-                
-                socket.on('answer', (data) => {
-                    handleAnswer(data);
-                });
-                
-                socket.on('ice-candidate', (data) => {
-                    handleIceCandidate(data);
-                });
-                
-                socket.on('user-left', (data) => {
-                    log(`User left: ${data.userId}`);
-                    removePeerConnection(data.userId);
-                });
-                
-                socket.on('connect_error', (error) => {
-                    log('Signaling server connection error: ' + error.message, 'error');
-                });
-            } catch (error) {
-                log('Error connecting to signaling server: ' + error.message, 'error');
-            }
+                localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+                document.getElementById('localVideoCtr').srcObject = localStream;
+                log('Media stream ready', 'success');
+            } catch(err) { log('Media error: '+err,'error'); alert('Cannot access camera/mic'); }
         }
 
-        // Start the call
-        async function startCall() {
-            try {
-                log('Requesting media access with desktop constraints...');
-                
-                // Try with ideal constraints first
-                try {
-                    localStream = await navigator.mediaDevices.getUserMedia(mediaConstraints);
-                } catch (error) {
-                    log('Failed with ideal constraints, trying fallback: ' + error.message, 'error');
-                    // Fallback to more permissive constraints
-                    localStream = await navigator.mediaDevices.getUserMedia({
-                        audio: true,
-                        video: true
-                    });
-                }
-                
-                const localVideo = document.getElementById('localVideoCtr');
-                if (localVideo) {
-                    localVideo.srcObject = localStream;
-                }
-                
-                log('Media access granted', 'success');
-                isCallStarted = true;
-                
-                // Notify others that we've joined
-                if (socket) {
-                    socket.emit('join-meeting', { meetingId, userId });
-                }
-            } catch (error) {
-                log('Error accessing media devices: ' + error.message, 'error');
-                alert('Could not access your camera or microphone. Please check permissions and try again.');
-            }
+        function connectSignaling() {
+            socket = io();
+
+            socket.on('connect',()=>{ log('Connected to signaling server', 'success'); socket.emit('joinMeeting',{meetingID:meetingId,userID:userId}); });
+            socket.on('newParticipant', users => { users.forEach(u=>createPeerConnection(u,true)); });
+            socket.on('signal', data=>handleSignal(data));
+            socket.on('participantLeft', data=>removePeerConnection(data.userID));
+            socket.on('receiveMessage', data=>addChatMessage(data.userID,data.msg));
         }
 
-        // Create peer connection
-        function createPeerConnection(targetUserId) {
-            try {
-                log(`Creating peer connection for ${targetUserId}`);
-                
-                const peerConnection = new RTCPeerConnection(configuration);
-                
-                // Add local stream to connection
-                if (localStream) {
-                    localStream.getTracks().forEach(track => {
-                        peerConnection.addTrack(track, localStream);
-                    });
-                }
-                
-                // Handle remote stream
-                peerConnection.ontrack = (event) => {
-                    log(`Received remote stream from ${targetUserId}`);
-                    const remoteStream = event.streams[0];
-                    addRemoteVideo(targetUserId, remoteStream);
-                };
-                
-                // Handle ICE candidates
-                peerConnection.onicecandidate = (event) => {
-                    if (event.candidate && socket) {
-                        socket.emit('ice-candidate', {
-                            targetUserId,
-                            candidate: event.candidate
-                        });
-                    }
-                };
-                
-                // Handle connection state changes
-                peerConnection.onconnectionstatechange = () => {
-                    log(`Connection state with ${targetUserId}: ${peerConnection.connectionState}`);
-                    
-                    if (peerConnection.connectionState === 'connected') {
-                        log(`Connected to ${targetUserId}`, 'success');
-                    } else if (peerConnection.connectionState === 'disconnected' || 
-                               peerConnection.connectionState === 'failed') {
-                        log(`Connection with ${targetUserId} failed`, 'error');
-                    }
-                };
-                
-                // Handle ICE connection state changes
-                peerConnection.oniceconnectionstatechange = () => {
-                    log(`ICE connection state with ${targetUserId}: ${peerConnection.iceConnectionState}`);
-                    
-                    if (peerConnection.iceConnectionState === 'failed') {
-                        log(`ICE connection with ${targetUserId} failed, restarting ICE`, 'error');
-                        // Try to restart ICE
-                        peerConnection.restartIce();
-                    }
-                };
-                
-                peerConnections[targetUserId] = peerConnection;
-                
-                // If we're creating the connection, create an offer
-                if (socket) {
-                    createOffer(targetUserId);
-                }
-            } catch (error) {
-                log('Error creating peer connection: ' + error.message, 'error');
-            }
+        function createPeerConnection(peerID,isInitiator=false) {
+            if(peerConnections[peerID]) return;
+            const pc = new RTCPeerConnection({ iceServers });
+            peerConnections[peerID] = pc;
+
+            if(localStream) localStream.getTracks().forEach(track=>pc.addTrack(track,localStream));
+
+            pc.onicecandidate = e=>{ if(e.candidate) socket.emit('signal',{from:userId,to:peerID,data:{type:'ice',candidate:e.candidate}}); };
+            pc.ontrack = e=>addRemoteVideo(peerID,e.streams[0]);
+
+            if(isInitiator) makeOffer(peerID);
         }
 
-        // Create offer
-        async function createOffer(targetUserId) {
-            try {
-                const peerConnection = peerConnections[targetUserId];
-                if (!peerConnection) return;
-                
-                const offer = await peerConnection.createOffer();
-                await peerConnection.setLocalDescription(offer);
-                
-                if (socket) {
-                    socket.emit('offer', {
-                        targetUserId,
-                        offer
-                    });
-                }
-            } catch (error) {
-                log('Error creating offer: ' + error.message, 'error');
-            }
+        async function makeOffer(peerID) {
+            const pc = peerConnections[peerID];
+            const offer = await pc.createOffer();
+            await pc.setLocalDescription(offer);
+            socket.emit('signal',{from:userId,to:peerID,data:{type:'offer',sdp:offer}});
         }
 
-        // Handle offer
-        async function handleOffer(data) {
-            try {
-                const { userId: targetUserId, offer } = data;
-                
-                if (!peerConnections[targetUserId]) {
-                    createPeerConnection(targetUserId);
-                }
-                
-                const peerConnection = peerConnections[targetUserId];
-                await peerConnection.setRemoteDescription(offer);
-                
-                const answer = await peerConnection.createAnswer();
-                await peerConnection.setLocalDescription(answer);
-                
-                if (socket) {
-                    socket.emit('answer', {
-                        targetUserId,
-                        answer
-                    });
-                }
-            } catch (error) {
-                log('Error handling offer: ' + error.message, 'error');
-            }
+        async function handleSignal({from,to,data}) {
+            if(to!==userId) return;
+            let pc = peerConnections[from] || createPeerConnection(from);
+            if(data.type==='offer') { await pc.setRemoteDescription(data.sdp); const ans=await pc.createAnswer(); await pc.setLocalDescription(ans); socket.emit('signal',{from:userId,to:from,data:{type:'answer',sdp:ans}}); }
+            else if(data.type==='answer') await pc.setRemoteDescription(data.sdp);
+            else if(data.type==='ice') await pc.addIceCandidate(data.candidate);
         }
 
-        // Handle answer
-        async function handleAnswer(data) {
-            try {
-                const { userId: targetUserId, answer } = data;
-                
-                const peerConnection = peerConnections[targetUserId];
-                if (peerConnection) {
-                    await peerConnection.setRemoteDescription(answer);
-                }
-            } catch (error) {
-                log('Error handling answer: ' + error.message, 'error');
-            }
-        }
-
-        // Handle ICE candidate
-        async function handleIceCandidate(data) {
-            try {
-                const { userId: targetUserId, candidate } = data;
-                
-                const peerConnection = peerConnections[targetUserId];
-                if (peerConnection && candidate) {
-                    await peerConnection.addIceCandidate(candidate);
-                }
-            } catch (error) {
-                log('Error adding ICE candidate: ' + error.message, 'error');
-            }
-        }
-
-        // Add remote video
-        function addRemoteVideo(userId, stream) {
-            // Check if video element already exists for this user
-            let remoteVideo = document.getElementById(`remoteVideo-${userId}`);
-            
-            if (!remoteVideo) {
-                // Clone the template
-                const template = document.getElementById('otherTemplate');
-                if (!template) return;
-                
-                const clone = template.cloneNode(true);
-                clone.id = `remote-${userId}`;
-                clone.style.display = 'flex';
-                
-                // Update user name
-                const userNameEl = clone.querySelector('h2');
-                if (userNameEl) {
-                    userNameEl.textContent = userId;
-                }
-                
-                // Get video element
-                remoteVideo = clone.querySelector('video');
-                if (remoteVideo) {
-                    remoteVideo.id = `remoteVideo-${userId}`;
-                }
-                
-                // Add to container
-                const divUsers = document.getElementById('divUsers');
-                if (divUsers) {
-                    divUsers.appendChild(clone);
-                }
-            }
-            
-            // Set video source
-            if (remoteVideo && stream) {
-                remoteVideo.srcObject = stream;
-            }
-            
-            // Update participant count
+        function removePeerConnection(peerID) {
+            if(peerConnections[peerID]) { peerConnections[peerID].close(); delete peerConnections[peerID]; }
+            const el = document.getElementById('remote-'+peerID); if(el) el.remove();
             updateParticipantCount();
         }
 
-        // Remove peer connection
-        function removePeerConnection(userId) {
-            if (peerConnections[userId]) {
-                peerConnections[userId].close();
-                delete peerConnections[userId];
-            }
-            
-            // Remove video element
-            const remoteElement = document.getElementById(`remote-${userId}`);
-            if (remoteElement) {
-                remoteElement.remove();
-            }
-            
-            // Update participant count
+        function addRemoteVideo(peerID,stream) {
+            if(document.getElementById('remoteVideo-'+peerID)) return;
+            const div = document.createElement('div'); div.id='remote-'+peerID; div.className='userbox div-center-column';
+            div.innerHTML=`<h2>${peerID}</h2><video autoplay></video>`;
+            div.querySelector('video').srcObject=stream;
+            document.getElementById('divUsers').appendChild(div);
             updateParticipantCount();
         }
 
-        // Update participant count
         function updateParticipantCount() {
-            const participantCount = Object.keys(peerConnections).length + 1; // +1 for local user
-            const countElements = document.querySelectorAll('.participant-count, .top-left-participant-count');
-            
-            countElements.forEach(el => {
-                el.textContent = participantCount;
-            });
+            const count = Object.keys(peerConnections).length+1;
+            document.querySelectorAll('.participant-count,.top-left-participant-count').forEach(el=>el.textContent=count);
         }
 
-        // Toggle mute
-        function toggleMute() {
-            if (!localStream) return;
-            
-            const audioTracks = localStream.getAudioTracks();
-            if (audioTracks.length > 0) {
-                isMuted = !isMuted;
-                audioTracks[0].enabled = !isMuted;
-                
-                const btn = document.getElementById('btnMuteUnmute');
-                if (btn) {
-                    btn.innerHTML = isMuted ? '<span class="material-icons">mic_off</span>' : '<span class="material-icons">mic</span>';
-                }
-                
-                log(isMuted ? 'Microphone muted' : 'Microphone unmuted');
-            }
-        }
+        function toggleMute() { if(!localStream) return; isMuted=!isMuted; localStream.getAudioTracks()[0].enabled=!isMuted; document.getElementById('btnMuteUnmute').innerHTML=`<span class="material-icons">${isMuted?'mic_off':'mic'}</span>`; log(isMuted?'Muted':'Unmuted'); }
+        function toggleVideo() { if(!localStream) return; isVideoEnabled=!isVideoEnabled; localStream.getVideoTracks()[0].enabled=isVideoEnabled; document.getElementById('btnStartStopCam').innerHTML=`<span class="material-icons">${isVideoEnabled?'videocam':'videocam_off'}</span>`; log(isVideoEnabled?'Video enabled':'Video disabled'); }
+        function endCall() { Object.keys(peerConnections).forEach(removePeerConnection); if(localStream)localStream.getTracks().forEach(t=>t.stop()); if(socket) socket.disconnect(); log('Call ended'); window.location.href='/sign'; }
 
-        // Toggle video
-        function toggleVideo() {
-            if (!localStream) return;
-            
-            const videoTracks = localStream.getVideoTracks();
-            if (videoTracks.length > 0) {
-                isVideoEnabled = !isVideoEnabled;
-                videoTracks[0].enabled = isVideoEnabled;
-                
-                const btn = document.getElementById('btnStartStopCam');
-                if (btn) {
-                    btn.innerHTML = isVideoEnabled ? '<span class="material-icons">videocam</span>' : '<span class="material-icons">videocam_off</span>';
-                }
-                
-                log(isVideoEnabled ? 'Video enabled' : 'Video disabled');
-            }
-        }
+        function addChatMessage(sender,msg){ const c=document.getElementById('messages'); const div=document.createElement('div'); div.innerHTML=`<strong>${sender}:</strong> ${msg}`; c.appendChild(div); c.scrollTop=c.scrollHeight; }
 
-        // End call
-        function endCall() {
-            // Close all peer connections
-            Object.keys(peerConnections).forEach(userId => {
-                removePeerConnection(userId);
-            });
-            
-            // Stop local stream
-            if (localStream) {
-                localStream.getTracks().forEach(track => track.stop());
-            }
-            
-            // Disconnect from signaling server
-            if (socket) {
-                socket.disconnect();
-            }
-            
-            log('Call ended');
-            window.location.href = '/sign';
-        }
-
-        // Initialize when page loads
-        $(document).ready(function() {
-            // Initialize the app
-            initApp();
-            
-            // Set up event listeners
-            document.getElementById('btnMuteUnmute').addEventListener('click', toggleMute);
-            document.getElementById('btnStartStopCam').addEventListener('click', toggleVideo);
-            document.getElementById('btnEndCall').addEventListener('click', endCall);
-            document.getElementById('debugToggle').addEventListener('click', function() {
-                const logContainer = document.getElementById('logContainer');
-                logContainer.style.display = logContainer.style.display === 'none' ? 'block' : 'none';
-            });
-            
-            // Set up timer
-            let startTime = Date.now();
-            setInterval(() => {
-                const elapsed = Math.floor((Date.now() - startTime) / 1000);
-                const minutes = Math.floor(elapsed / 60);
-                const seconds = elapsed % 60;
-                document.querySelector('.top-left-time-wrap').textContent = 
-                    `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-            }, 1000);
-            
-            // Chat functionality
-            document.getElementById('btnsend').addEventListener('click', function() {
-                const msgbox = document.getElementById('msgbox');
-                const message = msgbox.value.trim();
-                
-                if (message && socket) {
-                    socket.emit('chat-message', {
-                        userId,
-                        message
-                    });
-                    
-                    // Add to local chat
-                    addChatMessage(userId, message);
-                    msgbox.value = '';
-                }
-            });
-            
-            // Enter key for chat
-            document.getElementById('msgbox').addEventListener('keypress', function(e) {
-                if (e.which === 13) {
-                    document.getElementById('btnsend').click();
-                }
-            });
-            
-            // Mobile chat toggle
-            document.getElementById('mobileChatToggle').addEventListener('click', function() {
-                const chatPanel = document.querySelector('.g-right-details-wrap');
-                chatPanel.style.display = chatPanel.style.display === 'none' ? 'flex' : 'none';
-            });
+        $(document).ready(function(){
+            $('#btnMuteUnmute').click(toggleMute);
+            $('#btnStartStopCam').click(toggleVideo);
+            $('#btnEndCall').click(endCall);
+            $('#btnsend').click(()=>{ const msg=document.getElementById('msgbox').value.trim(); if(msg&&socket){ socket.emit('sendMessage',{meetingID:meetingId,userID:userId,msg}); addChatMessage(userId,msg); document.getElementById('msgbox').value=''; }});
+            $('#msgbox').keypress(e=>{ if(e.which==13){ $('#btnsend').click(); } });
+            $('#debugToggle').click(()=>{ $('#logContainer').toggle(); });
         });
-
-        // Add chat message
-        function addChatMessage(sender, message) {
-            const messagesContainer = document.getElementById('messages');
-            const messageElement = document.createElement('div');
-            messageElement.innerHTML = `<strong>${sender}:</strong> ${message}`;
-            messagesContainer.appendChild(messageElement);
-            messagesContainer.scrollTop = messagesContainer.scrollHeight;
-        }
     </script>
 </body>
 </html>
