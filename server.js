@@ -4,7 +4,7 @@ const fs = require('fs');
 const https = require('https');
 const { Server } = require('socket.io');
 const path = require('path');
-const axios = require('axios'); // ✅ added for Xirsys API
+const fetch = require('node-fetch'); // npm i node-fetch@2
 
 const app = express();
 
@@ -51,27 +51,26 @@ app.get('/health', (req, res) => {
   res.status(200).json({ status: 'OK', timestamp: new Date().toISOString() });
 });
 
-/* ✅ TURN/STUN endpoint for clients */
-app.get('/ice-servers', async (req, res) => {
+// TURN/STUN credentials route
+app.get('/turn-credentials', async (req, res) => {
   try {
-    const response = await axios.put(
-      "https://global.xirsys.net/_turn/myapp", // replace "myapp" with your Xirsys channel
-      {},
-      {
-        headers: {
-          Authorization:
-            "Basic " +
-            Buffer.from(
-              "65a8fdb8-7da3-11f0-98a1-0242ac130003:YOUR_XIRSYS_SECRET"
-            ).toString("base64"),
-        },
-      }
-    );
+    // Replace these with your Xirsys credentials
+    const username = process.env.XIRSYS_USERNAME || 'francis';
+    const secret = process.env.XIRSYS_SECRET || '65a8fdb8-7da3-11f0-98a1-0242ac130003';
+    const domain = process.env.XIRSYS_DOMAIN || 'global.xirsys.net';
+    
+    const url = `https://global.xirsys.net/_turn/${domain}`;
+    
+    const response = await fetch(url, {
+      method: 'PUT',
+      headers: { 'Authorization': 'Basic ' + Buffer.from(username + ':' + secret).toString('base64') },
+    });
 
-    res.json(response.data.v.iceServers);
+    const data = await response.json();
+    res.json(data.v || { iceServers: [] });
   } catch (err) {
-    console.error("Xirsys error:", err.message);
-    res.status(500).json({ error: "Failed to fetch ICE servers" });
+    console.error('Failed to fetch TURN credentials:', err);
+    res.json({ iceServers: [] }); // fallback handled on client
   }
 });
 
