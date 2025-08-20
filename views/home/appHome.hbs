@@ -224,4 +224,46 @@ function initPeerConnection(remoteUserId, isInitiator=true){
 
     pc.onicecandidate = e => {
         if(e.candidate){
-            socket.emit('signal',{
+            socket.emit('signal',{ from:userId, to:remoteUserId, data:{ candidate:e.candidate }});
+        }
+    };
+
+    pc.ontrack = e => {
+        let remoteVideo = document.getElementById(remoteUserId);
+        if(!remoteVideo){
+            const container = document.getElementById('divUsers');
+            const userbox = document.createElement('div');
+            userbox.className = 'userbox';
+            userbox.id = remoteUserId;
+            const nameLabel = document.createElement('h2');
+            nameLabel.textContent = remoteUserId;
+            const video = document.createElement('video');
+            video.autoplay = true;
+            video.srcObject = e.streams[0];
+            userbox.appendChild(nameLabel);
+            userbox.appendChild(video);
+            container.appendChild(userbox);
+        }
+    };
+
+    if(isInitiator){
+        pc.createOffer().then(offer => {
+            pc.setLocalDescription(offer);
+            socket.emit('signal',{ from:userId, to:remoteUserId, data:{ sdp: offer }});
+        });
+    }
+}
+
+// Chat send
+document.getElementById('btnsend').addEventListener('click', () => {
+    const msg = document.getElementById('msgbox').value.trim();
+    if(!msg) return;
+    socket.emit('sendMessage',{ meetingID: meetingId, userID: userId, msg });
+    document.getElementById('msgbox').value = '';
+});
+
+// Init app
+initApp();
+</script>
+</body>
+</html>
